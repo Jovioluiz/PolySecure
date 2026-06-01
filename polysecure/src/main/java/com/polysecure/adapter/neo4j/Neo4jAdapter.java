@@ -105,6 +105,16 @@ public class Neo4jAdapter implements StoreAdapter {
     }
 
     @Override
+    public long estimateCardinality(String table) {
+        try (Session session = driver.session()) {
+            var result = session.run("MATCH (n:" + table + ") RETURN count(n) AS cnt");
+            return result.single().get("cnt").asLong();
+        } catch (Exception e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    @Override
     public void close() { driver.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

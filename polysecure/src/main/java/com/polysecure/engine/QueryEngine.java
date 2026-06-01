@@ -21,15 +21,18 @@ public class QueryEngine {
     private final DdlExecutor ddl;
     private final DmlExecutor dml;
     private final MaterializedViewCache viewCache;
+    private final CostEstimator cost;
     private final ConditionEvaluator evaluator = new ConditionEvaluator();
 
     public QueryEngine(SqlPolyFacade parser, StoreRegistry registry,
-                       DdlExecutor ddl, DmlExecutor dml, MaterializedViewCache viewCache) {
+                       DdlExecutor ddl, DmlExecutor dml,
+                       MaterializedViewCache viewCache, CostEstimator cost) {
         this.parser = parser;
         this.registry = registry;
         this.ddl = ddl;
         this.dml = dml;
         this.viewCache = viewCache;
+        this.cost = cost;
     }
 
     public Statement parse(String sql) {
@@ -41,14 +44,17 @@ public class QueryEngine {
         Statement stmt = parser.parse(sql);
         return switch (stmt) {
             case SelectStatement s -> {
-                // Cache check
                 Optional<List<Map<String, Object>>> cached = viewCache.get(key);
                 if (cached.isPresent()) {
                     log.debug("materialized view hit: {}", key);
                     yield cached.get();
                 }
+                long t0 = System.currentTimeMillis();
                 List<Map<String, Object>> rows = executeSelect(s);
-                // Materialize on reaching the frequency threshold
+                long elapsed = System.currentTimeMillis() - t0;
+                cost.recordExecution(s, elapsed);
+                log.debug("SELECT executed in {}ms (predicted={}ms)", elapsed,
+                    String.format("%.1f", cost.predict(s)));
                 if (viewCache.recordExecution(key)) {
                     viewCache.put(key, rows, extractStores(s));
                     log.debug("materialized view created: stores={}", extractStores(s));
@@ -94,11 +100,14 @@ public class QueryEngine {
     public List<Map<String, Object>> executeSelect(SelectStatement stmt) {
         validateStores(stmt);
         List<Map<String, Object>> result = executeTable(stmt.from(), stmt.star(), stmt.projections(), stmt.where(), null);
-        for (JoinClause join : stmt.joins()) {
+
+        // Phase 4: reorder star-schema joins by ascending cardinality
+        List<JoinClause> joins = orderJoinsByCardinality(stmt);
+
+        for (JoinClause join : joins) {
             String innerAlias = join.table().effectiveAlias();
             JoinKey key = extractEquiJoinKey(join.on(), innerAlias);
             if (key != null && !result.isEmpty()) {
-                // Bind-join: collect distinct outer values, push IN predicate to inner store
                 Set<Object> outerValues = result.stream()
                     .map(row -> row.get(key.outerRowKey()))
                     .filter(Objects::nonNull)
@@ -113,7 +122,6 @@ public class QueryEngine {
                     join.table(), stmt.star(), stmt.projections(), stmt.where(), inCond);
                 result = hashJoin(result, right, key.outerRowKey(), key.innerField());
             } else {
-                // Fallback: nested-loop for non-equi joins or empty outer table
                 log.debug("nested-loop join for alias '{}' (no equi-join key or empty outer)", innerAlias);
                 List<Map<String, Object>> right = executeTable(
                     join.table(), stmt.star(), stmt.projections(), stmt.where(), null);
@@ -126,6 +134,37 @@ public class QueryEngine {
                 .collect(Collectors.toList());
         }
         return project(result, stmt.star(), stmt.projections());
+    }
+
+    // ── Phase 4: cardinality-based join ordering ──────────────────────────────
+
+    /**
+     * Reorders joins in ascending cardinality order when the query is a star schema
+     * (all joins reference the FROM table directly). For chained joins, keeps original order.
+     */
+    private List<JoinClause> orderJoinsByCardinality(SelectStatement stmt) {
+        if (stmt.joins().isEmpty()) return stmt.joins();
+        String fromAlias = stmt.from().effectiveAlias();
+        boolean allStar = stmt.joins().stream().allMatch(j -> {
+            JoinKey k = extractEquiJoinKey(j.on(), j.table().effectiveAlias());
+            // Non-equi join: safe to reorder. Equi-join: safe only if outer key references FROM.
+            return k == null || k.outerRowKey().startsWith(fromAlias + ".");
+        });
+        if (!allStar) {
+            log.debug("join ordering: chain-join detected — keeping original order");
+            return stmt.joins();
+        }
+        List<JoinClause> sorted = stmt.joins().stream()
+            .sorted(Comparator.comparingLong(j -> {
+                TableRef t = j.table();
+                String store = t.store() != null ? t.store() : t.table();
+                return cost.cardinality(store, t.table());
+            }))
+            .collect(Collectors.toList());
+        if (!sorted.equals(stmt.joins())) {
+            log.debug("join ordering: reordered {} joins by cardinality", sorted.size());
+        }
+        return sorted;
     }
 
     // ── Bind-join ────────────────────────────────────────────────────────────
@@ -153,7 +192,6 @@ public class QueryEngine {
 
     private List<Map<String, Object>> hashJoin(List<Map<String, Object>> left,
             List<Map<String, Object>> right, String outerRowKey, String innerField) {
-        // Index right side by innerField (handles alias-prefixed keys like "p.user_id")
         Map<String, List<Map<String, Object>>> index = new HashMap<>();
         for (Map<String, Object> r : right) {
             Object val = findValue(r, innerField);
@@ -172,7 +210,6 @@ public class QueryEngine {
         return result;
     }
 
-    /** Finds a value in a row by bare field name, ignoring any alias prefix. */
     private Object findValue(Map<String, Object> row, String field) {
         for (Map.Entry<String, Object> e : row.entrySet()) {
             String k = e.getKey();
@@ -182,11 +219,6 @@ public class QueryEngine {
         return null;
     }
 
-    /**
-     * Normalises a join-key value to a canonical string for hash-map lookup.
-     * Integers from different stores may differ in type (Integer vs Long),
-     * so all integer-like numbers collapse to the same key.
-     */
     private String toIndexKey(Object v) {
         if (v instanceof Integer i) return "i:" + i.longValue();
         if (v instanceof Long l)    return "i:" + l;
@@ -209,7 +241,6 @@ public class QueryEngine {
                 .filter(c -> c.tableAlias() == null || c.tableAlias().equals(alias))
                 .collect(Collectors.toList());
 
-        // Combine the global WHERE with any bind-join IN predicate for this store
         Condition combined = (where == null) ? extra
             : (extra == null) ? where
             : new Condition.And(where, extra);
@@ -282,12 +313,10 @@ public class QueryEngine {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /** Collapses whitespace so `SELECT  *  FROM x` and `SELECT * FROM x` share the same cache key. */
     private String normalizeKey(String sql) {
         return sql.trim().replaceAll("\\s+", " ");
     }
 
-    /** Extracts the set of store names referenced by a SELECT statement. */
     private Set<String> extractStores(SelectStatement stmt) {
         Set<String> stores = new LinkedHashSet<>();
         TableRef from = stmt.from();
@@ -309,6 +338,6 @@ public class QueryEngine {
         });
     }
 
-    /** Exposes the cache for admin inspection. */
     public MaterializedViewCache viewCache() { return viewCache; }
+    public CostEstimator costEstimator() { return cost; }
 }

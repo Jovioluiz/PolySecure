@@ -37,7 +37,7 @@ public class DmlExecutor {
             affected.put(clause.storeName(), 1);
         }
 
-        tx.run(ops);
+        tx.runParallel(ops);
         int total = affected.values().stream().mapToInt(Integer::intValue).sum();
         return new DmlResult("INSERT", stmt.tableName(), affected,
             "Inserted " + total + " row(s) across " + affected.size() + " store(s)");
@@ -71,7 +71,7 @@ public class DmlExecutor {
             ))
             .collect(Collectors.toList());
 
-        tx.run(ops);
+        tx.runParallel(ops);
         int total = affected.values().stream().mapToInt(Integer::intValue).sum();
         return new DmlResult("UPDATE", stmt.tableName(), affected,
             "Updated " + total + " row(s) across " + affected.size() + " store(s)");
@@ -102,7 +102,7 @@ public class DmlExecutor {
             ))
             .collect(Collectors.toList());
 
-        tx.run(ops);
+        tx.runParallel(ops);
         int total = affected.values().stream().mapToInt(Integer::intValue).sum();
         return new DmlResult("DELETE", stmt.tableName(), affected,
             "Deleted " + total + " row(s) across " + affected.size() + " store(s)");
@@ -130,7 +130,7 @@ public class DmlExecutor {
             affected.put(target.storeName(), storeRows.size());
         }
 
-        tx.run(ops);
+        tx.runParallel(ops);
         int total = affected.values().stream().mapToInt(Integer::intValue).sum();
         return new DmlResult("INSERT_SELECT", stmt.tableName(), affected,
             "Inserted " + rows.size() + " row(s) from SELECT into " + affected.size() + " store(s), "

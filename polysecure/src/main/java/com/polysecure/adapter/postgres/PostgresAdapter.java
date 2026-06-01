@@ -92,6 +92,21 @@ public class PostgresAdapter implements StoreAdapter {
     }
 
     @Override
+    public long estimateCardinality(String table) {
+        try {
+            Long n = jdbc.queryForObject(
+                "SELECT reltuples::bigint FROM pg_class WHERE relname = ?", Long.class, table);
+            if (n != null && n > 0) return n;
+        } catch (Exception ignored) {}
+        try {
+            Long c = jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+            return c != null ? c : 0L;
+        } catch (Exception e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    @Override
     public void close() { dataSource.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

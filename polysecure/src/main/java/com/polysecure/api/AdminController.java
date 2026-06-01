@@ -1,6 +1,7 @@
 package com.polysecure.api;
 
 import com.polysecure.api.dto.CreateUserRequest;
+import com.polysecure.engine.CostEstimator;
 import com.polysecure.engine.MaterializedViewCache;
 import com.polysecure.engine.QueryEngine;
 import com.polysecure.security.audit.AuditLogger;
@@ -11,7 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin")
@@ -21,6 +24,7 @@ public class AdminController {
     private final RoleRegistry roleRegistry;
     private final AuditLogger auditLogger;
     private final MaterializedViewCache viewCache;
+    private final CostEstimator costEstimator;
 
     public AdminController(UserRegistry userRegistry,
                            RoleRegistry roleRegistry,
@@ -30,6 +34,7 @@ public class AdminController {
         this.roleRegistry = roleRegistry;
         this.auditLogger = auditLogger;
         this.viewCache = engine.viewCache();
+        this.costEstimator = engine.costEstimator();
     }
 
     @PostMapping("/users")
@@ -83,6 +88,22 @@ public class AdminController {
         int before = viewCache.viewCount();
         viewCache.clear();
         return ResponseEntity.ok("Cleared " + before + " materialized view(s)");
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('DBA_ADMIN')")
+    public ResponseEntity<?> getStats() {
+        double[] w = costEstimator.model().weights();
+        Map<String, Object> costModel = Map.of(
+            "featureNames", List.of("bias", "log(outerCardinality+1)", "numJoins", "hasWhere"),
+            "weights", Arrays.stream(w).boxed().toList(),
+            "sampleCount", costEstimator.model().sampleCount(),
+            "description", "Linear regression: cost_ms = w0 + w1*log(card+1) + w2*joins + w3*hasWhere"
+        );
+        return ResponseEntity.ok(Map.of(
+            "cardinalityCache", costEstimator.stats().snapshot(),
+            "costModel", costModel
+        ));
     }
 
     private record UserSummary(String username, String roleName) {}

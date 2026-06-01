@@ -89,6 +89,15 @@ public class MongoAdapter implements StoreAdapter {
     }
 
     @Override
+    public long estimateCardinality(String table) {
+        try {
+            return database.getCollection(table).estimatedDocumentCount();
+        } catch (Exception e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    @Override
     public void close() { client.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

@@ -6,14 +6,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 // Best-effort transaction across heterogeneous stores (no distributed 2PC).
-// On failure, attempts to rollback already-completed operations in reverse order.
+// Sequential run(): if an operation fails, completed ones are rolled back in reverse order.
+// Parallel runParallel(): all operations start concurrently; any failure triggers rollback of all completed.
 @Component
 public class TransactionCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionCoordinator.class);
+
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public record Operation(String description, Runnable execute, Runnable rollback) {}
 
@@ -30,6 +34,43 @@ public class TransactionCoordinator {
                     "Failed on [" + op.description() + "]. Rollback attempted for "
                     + completed.size() + " prior operation(s). Cause: " + ex.getMessage(), ex);
             }
+        }
+    }
+
+    /**
+     * Executes all operations in parallel using virtual threads (Phase 4 — parallel DML).
+     * If any operation fails, completed ones are rolled back. Falls back to sequential for a single op.
+     */
+    public void runParallel(List<Operation> operations) {
+        if (operations.size() <= 1) {
+            run(operations);
+            return;
+        }
+        List<Future<Operation>> futures = operations.stream()
+            .map(op -> executor.submit(() -> { op.execute().run(); return op; }))
+            .toList();
+
+        List<Operation> completed = new ArrayList<>();
+        List<Throwable> errors = new ArrayList<>();
+
+        for (Future<Operation> f : futures) {
+            try {
+                completed.add(f.get());
+            } catch (ExecutionException ex) {
+                errors.add(ex.getCause());
+                log.warn("Parallel operation failed: {}", ex.getCause().getMessage());
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                errors.add(ex);
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            rollback(completed);
+            throw new RuntimeException(
+                "Parallel DML failed (" + errors.size() + " error(s)). "
+                + "Rollback attempted for " + completed.size() + " completed operation(s). "
+                + "First cause: " + errors.get(0).getMessage(), errors.get(0));
         }
     }
 

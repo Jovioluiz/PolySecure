@@ -23,5 +23,8 @@ public interface StoreAdapter {
     int update(String table, Map<String, Object> updates, Condition where);
     int delete(String table, Condition where);
 
+    // Phase 4 — Statistics
+    long estimateCardinality(String table);
+
     void close();
 }
