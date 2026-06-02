@@ -1,0 +1,9 @@
+@if (sql()) {
+  <div class="translation-panel">
+    <div class="translation-header">
+      <span>SQL-Poly traduzido <span class="badge-tag">interno</span></span>
+      <button class="btn-close" (click)="closed.emit()">✕</button>
+    </div>
+    <div class="translation-body">{{ sql() }}</div>
+  </div>
+}

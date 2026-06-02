@@ -1,0 +1,110 @@
+<aside class="sidebar">
+
+  <!-- Stores -->
+  <div class="sidebar-section">
+    <div class="section-header">
+      <h3>Stores</h3>
+      <button
+        class="add-store-btn"
+        [class.active]="showForm()"
+        (click)="toggleForm()"
+        title="{{ showForm() ? 'Cancelar' : 'Adicionar store' }}"
+      >{{ showForm() ? '✕' : '+' }}</button>
+    </div>
+
+    @if (showForm()) {
+      <div class="store-form">
+        <div class="form-field">
+          <label>Nome</label>
+          <input [(ngModel)]="form.name" placeholder="pg" autocomplete="off" />
+        </div>
+        <div class="form-field">
+          <label>Tipo</label>
+          <select [(ngModel)]="form.type" (ngModelChange)="onTypeChange()">
+            <option value="POSTGRES">PostgreSQL</option>
+            <option value="MONGODB">MongoDB</option>
+            <option value="NEO4J">Neo4j</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Host</label>
+            <input [(ngModel)]="form.host" placeholder="localhost" autocomplete="off" />
+          </div>
+          <div class="form-field form-field--port">
+            <label>Porta</label>
+            <input type="number" [(ngModel)]="form.port" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Database</label>
+          <input [(ngModel)]="form.database" placeholder="meu_banco" autocomplete="off" />
+        </div>
+        <div class="form-field">
+          <label>Usuário</label>
+          <input [(ngModel)]="form.username" placeholder="(opcional)" autocomplete="off" />
+        </div>
+        <div class="form-field">
+          <label>Senha</label>
+          <input type="password" [(ngModel)]="form.password" placeholder="(opcional)" autocomplete="off" />
+        </div>
+
+        @if (formError()) {
+          <div class="form-error">{{ formError() }}</div>
+        }
+
+        <div class="form-actions">
+          <button class="btn-cancel" (click)="toggleForm()">Cancelar</button>
+          <button class="btn-save" [disabled]="saving()" (click)="submitStore()">
+            {{ saving() ? 'Salvando…' : 'Adicionar' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (catalog.loading()) {
+      <div class="sidebar-item muted">Carregando…</div>
+    } @else if (catalog.stores().length === 0) {
+      <div class="sidebar-item muted">Nenhum store registrado</div>
+    } @else {
+      @for (store of catalog.stores(); track store) {
+        <div class="sidebar-item">
+          <span class="store-dot" [style.background]="storeColor(store)"></span>
+          <span class="store-name">{{ store }}</span>
+          <span class="sidebar-badge" [class]="storeBadgeClass(store)">{{ storeBadgeLabel(store) }}</span>
+          <button class="btn-remove" (click)="deleteStore(store)" title="Remover store">×</button>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Tables -->
+  <div class="sidebar-section">
+    <h3>Tabelas</h3>
+    @if (catalog.loading()) {
+      <div class="sidebar-item muted">Carregando…</div>
+    } @else {
+      @for (entry of catalog.tables() | keyvalue; track entry.key) {
+        <div class="table-group">
+          <div class="sidebar-item table-name" (click)="selectTable(entry.key)">
+            <span>⊞</span>
+            <span>{{ entry.key }}</span>
+          </div>
+          <div class="table-cols">
+            @for (col of entry.value; track col.name) {
+              <div class="col-item">
+                <span class="store-dot small" [style.background]="storeColor(col.store)"></span>
+                <span class="col-name">{{ col.name }}</span>
+                <span class="col-type">{{ col.type }}</span>
+                @if (col.primaryKey) {
+                  <span class="col-pk">PK</span>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+</aside>

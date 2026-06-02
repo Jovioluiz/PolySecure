@@ -1,0 +1,30 @@
+@if (!auth.isLoggedIn()) {
+  <app-login (loggedIn)="onLoggedIn()" />
+} @else {
+  <div class="workspace">
+    <app-navbar
+      (loggedOut)="queryResult.set(null); translationSql.set(null)"
+      (helpRequested)="showHelp.set(true)"
+    />
+
+    <div class="workspace-body">
+      <app-sidebar (tableSelected)="onTableSelected($event)" />
+
+      <main class="main-content">
+        <app-editor-panel
+          (result)="onResult($event)"
+          (translationReady)="onTranslation($event)"
+        />
+
+        <app-translation-panel
+          [sql]="translationSql()"
+          (closed)="translationSql.set(null)"
+        />
+
+        <app-results-panel [result]="queryResult()" />
+      </main>
+    </div>
+  </div>
+
+  <app-help-modal [showHelp]="showHelp()" (closed)="showHelp.set(false)" />
+}

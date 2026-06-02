@@ -1,0 +1,10 @@
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-poly">Poly</span><span class="brand-secure">Secure</span>
+  </div>
+  <div class="nav-right">
+    <button class="btn-help" (click)="helpRequested.emit()" title="Como usar">?</button>
+    <span class="nav-user">{{ auth.username() }}</span>
+    <button class="btn-ghost" (click)="logout()">Sair</button>
+  </div>
+</nav>

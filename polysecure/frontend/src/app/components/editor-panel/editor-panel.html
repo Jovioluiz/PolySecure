@@ -1,0 +1,35 @@
+<div class="editor-panel">
+  <div class="editor-toolbar">
+    <div class="mode-group">
+      <button
+        class="mode-btn"
+        [class.active]="mode() === 'standard'"
+        (click)="setMode('standard')"
+      >SQL Padrão (PostgreSQL)</button>
+      <button
+        class="mode-btn"
+        [class.active]="mode() === 'poly'"
+        (click)="setMode('poly')"
+      >SQL-Poly (avançado)</button>
+    </div>
+
+    <div class="action-group">
+      @if (mode() === 'standard') {
+        <button class="btn-translate" [disabled]="translating()" (click)="translate()">
+          ⇄ {{ translating() ? 'Traduzindo…' : 'Ver SQL-Poly' }}
+        </button>
+      }
+      <button class="btn-run" [disabled]="running()" (click)="run()">
+        @if (running()) {
+          <span class="spinner"></span> Executando…
+        } @else {
+          ▶ Executar <span class="key-hint">F5</span>
+        }
+      </button>
+    </div>
+  </div>
+
+  <div class="editor-wrap">
+    <div #editorWrap class="cm-host"></div>
+  </div>
+</div>

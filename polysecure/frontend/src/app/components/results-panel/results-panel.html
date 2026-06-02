@@ -1,0 +1,56 @@
+<div class="results-panel">
+  <div class="results-header">
+    <span>Resultados</span>
+    @if (asSelect) {
+      <span class="row-count">{{ asSelect.rowCount }} linha(s)</span>
+    }
+  </div>
+
+  <div class="results-body">
+    @if (!result()) {
+      <div class="empty-state">Execute uma query para ver os resultados</div>
+    } @else if (errorMsg) {
+      <div class="error-box">
+        <span class="error-icon">✕</span>
+        <span>{{ errorMsg }}</span>
+      </div>
+    } @else if (asSelect) {
+      @if (asSelect.rows.length === 0) {
+        <div class="empty-state">Nenhum resultado encontrado</div>
+      } @else {
+        <div class="table-wrap">
+          <table class="result-table">
+            <thead>
+              <tr>
+                @for (col of columns; track col) {
+                  <th>{{ col }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of asSelect.rows; track $index) {
+                <tr>
+                  @for (col of columns; track col) {
+                    <td>{{ cellValue(row, col) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    } @else if (asDml) {
+      <div class="dml-result">
+        <div class="dml-badge" [class]="'op-' + asDml.operation.toLowerCase()">
+          {{ asDml.operation }}
+        </div>
+        <p class="dml-msg">{{ asDml.message }}</p>
+        <div class="dml-stores">
+          @for (entry of asDml.affectedByStore | keyvalue; track entry.key) {
+            <span class="store-tag">{{ entry.key }}: {{ entry.value }} afetado(s)</span>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>

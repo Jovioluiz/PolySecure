@@ -1,0 +1,221 @@
+.sidebar {
+  width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 12px 0;
+}
+
+.sidebar-section {
+  margin-bottom: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px 8px 16px;
+
+  h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 0;
+  }
+}
+
+h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 4px 16px 8px;
+  font-weight: 600;
+}
+
+.add-store-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+
+  &:hover { border-color: var(--green); color: var(--green); }
+  &.active { border-color: var(--red); color: var(--red); }
+}
+
+/* ── Formulário inline ── */
+.store-form {
+  margin: 0 10px 12px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-row {
+  display: flex;
+  gap: 6px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+
+  &--port { flex: 0 0 64px; }
+
+  label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  input, select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 11px;
+    padding: 4px 7px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+
+    &:focus { border-color: var(--accent); }
+  }
+
+  select { cursor: pointer; }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button { -webkit-appearance: none; }
+  }
+}
+
+.form-error {
+  font-size: 11px;
+  color: var(--red);
+  padding: 2px 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 2px;
+
+  button {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+
+  .btn-cancel {
+    background: none;
+    color: var(--muted);
+    &:hover { color: var(--text); }
+  }
+
+  .btn-save {
+    background: var(--green);
+    color: #0d1117;
+    border-color: var(--green);
+    font-weight: 600;
+    &:hover:not(:disabled) { opacity: 0.85; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+/* ── Lista de stores ── */
+.sidebar-item {
+  padding: 5px 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  cursor: default;
+
+  &.muted { color: var(--muted); }
+
+  &.table-name {
+    cursor: pointer;
+    &:hover { background: rgba(88, 166, 255, 0.08); }
+  }
+}
+
+.store-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: transparent;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+
+  .sidebar-item:hover & { color: var(--muted); }
+  &:hover { color: var(--red) !important; }
+}
+
+.sidebar-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+
+  &.badge-pg  { background: rgba(63,185,80,.15);  color: var(--green);  }
+  &.badge-mg  { background: rgba(188,140,255,.15); color: var(--purple); }
+  &.badge-neo { background: rgba(210,153,34,.15);  color: var(--yellow); }
+  &.badge-def { background: rgba(88,166,255,.15);  color: var(--accent); }
+}
+
+.store-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  &.small { width: 6px; height: 6px; }
+}
+
+.table-cols { padding: 4px 16px 4px 28px; }
+
+.col-item {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.col-name { color: var(--text); }
+.col-type { color: var(--muted); }
+.col-pk   { color: var(--yellow); font-size: 10px; }

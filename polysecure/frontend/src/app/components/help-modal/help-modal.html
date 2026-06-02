@@ -1,0 +1,165 @@
+@if (showHelp()) {
+  <div class="help-overlay" (click)="close()">
+    <div class="help-card" (click)="$event.stopPropagation()">
+
+      <div class="help-header">
+        <h2>Como usar o PolySecure</h2>
+        <button class="btn-close" (click)="close()">&#x2715;</button>
+      </div>
+
+      <div class="help-tabs">
+        <button class="tab-btn" [class.active]="activeTab() === 'standard'" (click)="setTab('standard')">SQL Padrão</button>
+        <button class="tab-btn" [class.active]="activeTab() === 'poly'" (click)="setTab('poly')">SQL-Poly</button>
+        <button class="tab-btn" [class.active]="activeTab() === 'stores'" (click)="setTab('stores')">Adicionar Stores</button>
+      </div>
+
+      <div class="help-body">
+
+        @if (activeTab() === 'standard') {
+          <section class="help-section">
+            <p class="help-intro">
+              O modo <strong>SQL Padrão</strong> envia a query diretamente ao PostgreSQL.
+              Use o prefixo <code>store.tabela</code> para indicar em qual store a tabela está.
+            </p>
+
+            <h3>Selecionar dados</h3>
+            <pre><code>-- Todos os registros de uma tabela
+SELECT * FROM pg.users;
+
+-- Com projeção de colunas
+SELECT id, name FROM pg.users;
+
+-- Com filtro WHERE
+SELECT id, name FROM pg.users WHERE active = true;
+
+-- Com alias de tabela
+SELECT u.id, u.name
+FROM pg.users u
+WHERE u.id = 1;</code></pre>
+
+            <h3>Convenções</h3>
+            <ul>
+              <li>O prefixo (<code>pg</code>, <code>mg</code>, <code>neo</code>) é o nome da store registrada.</li>
+              <li>No modo padrão, apenas uma store por query — sem JOIN cross-store.</li>
+              <li>Para queries cross-store, use o modo <strong>SQL-Poly</strong>.</li>
+            </ul>
+          </section>
+        }
+
+        @if (activeTab() === 'poly') {
+          <section class="help-section">
+            <p class="help-intro">
+              O modo <strong>SQL-Poly</strong> é a linguagem nativa do PolySecure.
+              Suporta JOIN entre stores diferentes, DDL e DML cross-store.
+            </p>
+
+            <h3>SELECT cross-store</h3>
+            <pre><code>-- JOIN entre PostgreSQL e MongoDB
+SELECT u.name, p.bio
+FROM pg.users u
+JOIN mg.profiles p ON u.id = p.user_id
+WHERE u.active = true;</code></pre>
+
+            <h3>DDL — Criar / Remover tabela</h3>
+            <pre><code>-- Criar tabela distribuída em múltiplas stores
+CREATE POLYSTORE TABLE orders (
+  id       INT      STORE pg PRIMARY KEY,
+  detalhes DOCUMENT STORE mg,
+  grafo    GRAPH    STORE neo
+);
+
+-- Remover tabela
+DROP POLYSTORE TABLE orders;</code></pre>
+
+            <h3>DML — Inserir, Atualizar, Deletar</h3>
+            <pre><code>-- INSERT em múltiplas stores simultaneamente
+INSERT INTO POLYSTORE orders
+  pg (id, total)    VALUES (1, 150.0)
+  mg (id, detalhes) VALUES (1, 'descricao do produto');
+
+-- UPDATE cross-store (atualiza pg e mg de uma vez)
+UPDATE POLYSTORE orders
+  SET pg.total = 199.9,
+      mg.detalhes = 'atualizado'
+  WHERE id = 1;
+
+-- DELETE cross-store
+DELETE FROM POLYSTORE orders WHERE id = 1;</code></pre>
+
+            <h3>Tipos de coluna suportados</h3>
+            <ul>
+              <li><code>INT</code>, <code>TEXT</code>, <code>FLOAT</code> — colunas relacionais (PostgreSQL)</li>
+              <li><code>DOCUMENT</code> — documento JSON (MongoDB)</li>
+              <li><code>GRAPH</code> — nó ou relação (Neo4j)</li>
+            </ul>
+          </section>
+        }
+
+        @if (activeTab() === 'stores') {
+          <section class="help-section">
+            <p class="help-intro">
+              Stores podem ser adicionadas diretamente pelo <strong>painel lateral esquerdo</strong>:
+              clique no botão <code>+</code> ao lado de "Stores", preencha o formulário e clique em "Adicionar".
+              Para remover, passe o mouse sobre a store e clique em <code>×</code>.
+            </p>
+            <p class="help-intro">
+              Também é possível registrar via API REST usando um cliente HTTP (Postman, curl, Insomnia).
+            </p>
+
+            <h3>Endpoint de registro</h3>
+            <pre><code>POST http://localhost:8080/stores
+Authorization: Bearer &lt;seu-token&gt;
+Content-Type: application/json</code></pre>
+
+            <h3>PostgreSQL</h3>
+            <pre><code>&#123;
+  "name":     "pg",
+  "type":     "POSTGRES",
+  "host":     "localhost",
+  "port":     5432,
+  "database": "meu_banco",
+  "username": "usuario",
+  "password": "senha"
+&#125;</code></pre>
+
+            <h3>MongoDB</h3>
+            <pre><code>&#123;
+  "name":     "mg",
+  "type":     "MONGODB",
+  "host":     "localhost",
+  "port":     27017,
+  "database": "meu_banco",
+  "username": null,
+  "password": null
+&#125;</code></pre>
+
+            <h3>Neo4j</h3>
+            <pre><code>&#123;
+  "name":     "neo",
+  "type":     "NEO4J",
+  "host":     "localhost",
+  "port":     7687,
+  "database": "neo4j",
+  "username": "neo4j",
+  "password": "senha"
+&#125;</code></pre>
+
+            <h3>Listar stores registradas</h3>
+            <pre><code>GET http://localhost:8080/stores
+Authorization: Bearer &lt;seu-token&gt;</code></pre>
+
+            <h3>Remover uma store</h3>
+            <pre><code>DELETE http://localhost:8080/stores/pg
+Authorization: Bearer &lt;seu-token&gt;</code></pre>
+
+            <div class="help-tip">
+              Após registrar uma store, ela aparece automaticamente no painel lateral.
+              As stores ficam disponíveis enquanto o backend estiver em execução.
+            </div>
+          </section>
+        }
+
+      </div>
+    </div>
+  </div>
+}
