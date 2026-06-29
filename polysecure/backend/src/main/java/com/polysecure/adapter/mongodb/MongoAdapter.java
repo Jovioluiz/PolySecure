@@ -4,6 +4,7 @@ import com.mongodb.client.*;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Updates;
 import com.polysecure.adapter.StoreAdapter;
+import com.polysecure.adapter.StoreCapabilities;
 import com.polysecure.catalog.StoreConfig;
 import com.polysecure.model.*;
 import org.bson.Document;
@@ -98,6 +99,12 @@ public class MongoAdapter implements StoreAdapter {
     }
 
     @Override
+    public StoreCapabilities getCapabilities() {
+        // MongoDB is schema-less — DDL is limited (no ALTER, no constraints beyond simple ones)
+        return new StoreCapabilities(true, true, true, true, false, false);
+    }
+
+    @Override
     public void close() { client.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -121,12 +128,44 @@ public class MongoAdapter implements StoreAdapter {
         return switch (cond) {
             case Condition.And a -> Filters.and(toFilter(a.left(), alias), toFilter(a.right(), alias));
             case Condition.Or  o -> Filters.or(toFilter(o.left(), alias), toFilter(o.right(), alias));
+            case Condition.Not n -> Filters.nor(toFilter(n.inner(), alias));
             case Condition.Compare c -> toCompare(c, alias);
             case Condition.In i -> {
                 if (!(i.expr() instanceof Expr.Column col)) yield new Document();
                 yield Filters.in(col.name(), i.values());
             }
+            case Condition.IsNull isn -> {
+                if (!(isn.expr() instanceof Expr.Column col)) yield new Document();
+                // $eq: null matches both null values and missing fields in MongoDB
+                yield Filters.eq(col.name(), (Object) null);
+            }
+            case Condition.Like like -> {
+                if (!(like.expr() instanceof Expr.Column col)) yield new Document();
+                yield Filters.regex(col.name(), likeToRegex(like.pattern()));
+            }
+            case Condition.Between between -> {
+                if (!(between.expr() instanceof Expr.Column col)) yield new Document();
+                yield Filters.and(
+                    Filters.gte(col.name(), between.low()),
+                    Filters.lte(col.name(), between.high())
+                );
+            }
         };
+    }
+
+    private String likeToRegex(String pattern) {
+        StringBuilder regex = new StringBuilder("(?s)");
+        for (int i = 0; i < pattern.length(); i++) {
+            char c = pattern.charAt(i);
+            if (c == '%') {
+                regex.append(".*");
+            } else if (c == '_') {
+                regex.append(".");
+            } else {
+                regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+            }
+        }
+        return regex.toString();
     }
 
     private Bson toCompare(Condition.Compare c, String alias) {

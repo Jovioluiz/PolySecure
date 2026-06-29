@@ -5,6 +5,7 @@ import com.polysecure.adapter.StoreAdapter;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StoreRegistry {
 
     private final Map<String, StoreAdapter> adapters = new ConcurrentHashMap<>();
+    private final Map<String, StoreConfig> configs = new ConcurrentHashMap<>();
     private final AdapterFactory factory;
 
     public StoreRegistry(AdapterFactory factory) {
@@ -22,11 +24,13 @@ public class StoreRegistry {
         StoreAdapter existing = adapters.remove(config.name());
         if (existing != null) existing.close();
         adapters.put(config.name(), factory.create(config));
+        configs.put(config.name(), config);
     }
 
     public void unregister(String name) {
         StoreAdapter adapter = adapters.remove(name);
         if (adapter != null) adapter.close();
+        configs.remove(name);
     }
 
     public StoreAdapter get(String name) {
@@ -41,5 +45,9 @@ public class StoreRegistry {
 
     public boolean exists(String name) {
         return adapters.containsKey(name);
+    }
+
+    public List<StoreConfig> getConfigs() {
+        return List.copyOf(configs.values());
     }
 }

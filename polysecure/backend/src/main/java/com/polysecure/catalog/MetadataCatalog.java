@@ -58,4 +58,18 @@ public class MetadataCatalog {
     public Set<String> listTables() {
         return Collections.unmodifiableSet(tables.keySet());
     }
+
+    // Returns a snapshot of the catalog for persistence
+    public Map<String, List<ColumnDefinition>> dump() {
+        return Map.copyOf(tables);
+    }
+
+    // Restores catalog from a persisted snapshot (skips tables that already exist)
+    public void loadRaw(Map<String, List<ColumnDefinition>> data) {
+        data.forEach((tableName, cols) -> {
+            if (!tables.containsKey(tableName)) {
+                tables.put(tableName, List.copyOf(cols));
+            }
+        });
+    }
 }

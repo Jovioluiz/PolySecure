@@ -22,17 +22,20 @@ public class QueryEngine {
     private final DmlExecutor dml;
     private final MaterializedViewCache viewCache;
     private final CostEstimator cost;
+    private final SemanticValidator semanticValidator;
     private final ConditionEvaluator evaluator = new ConditionEvaluator();
 
     public QueryEngine(SqlPolyFacade parser, StoreRegistry registry,
                        DdlExecutor ddl, DmlExecutor dml,
-                       MaterializedViewCache viewCache, CostEstimator cost) {
+                       MaterializedViewCache viewCache, CostEstimator cost,
+                       SemanticValidator semanticValidator) {
         this.parser = parser;
         this.registry = registry;
         this.ddl = ddl;
         this.dml = dml;
         this.viewCache = viewCache;
         this.cost = cost;
+        this.semanticValidator = semanticValidator;
     }
 
     public Statement parse(String sql) {
@@ -42,6 +45,7 @@ public class QueryEngine {
     public Object execute(String sql) {
         String key = normalizeKey(sql);
         Statement stmt = parser.parse(sql);
+        semanticValidator.validate(stmt);
         return switch (stmt) {
             case SelectStatement s -> {
                 Optional<List<Map<String, Object>>> cached = viewCache.get(key);
@@ -98,7 +102,6 @@ public class QueryEngine {
     // ── SELECT ───────────────────────────────────────────────────────────────
 
     public List<Map<String, Object>> executeSelect(SelectStatement stmt) {
-        validateStores(stmt);
         List<Map<String, Object>> result = executeTable(stmt.from(), stmt.star(), stmt.projections(), stmt.where(), null);
 
         // Phase 4: reorder star-schema joins by ascending cardinality
@@ -220,11 +223,10 @@ public class QueryEngine {
     }
 
     private String toIndexKey(Object v) {
-        if (v instanceof Integer i) return "i:" + i.longValue();
-        if (v instanceof Long l)    return "i:" + l;
-        if (v instanceof Short s)   return "i:" + s.longValue();
-        if (v instanceof Float f)   return "f:" + f.doubleValue();
-        if (v instanceof Double d)  return "f:" + d;
+        if (v instanceof Number n) return "n:" + n.doubleValue();
+        if (v instanceof String s) {
+            try { return "n:" + Double.parseDouble(s); } catch (NumberFormatException ignored) {}
+        }
         return "s:" + v;
     }
 
@@ -277,10 +279,17 @@ public class QueryEngine {
                                                List<ColumnRef> projections) {
         if (star || projections.isEmpty()) {
             return rows.stream().map(row -> {
+                // Count how many prefixed keys share the same bare column name.
+                // Duplicates (same column in multiple stores) keep their alias prefix (s_id, m_id).
+                Map<String, Long> nameCount = row.keySet().stream()
+                    .collect(Collectors.groupingBy(
+                        k -> { int d = k.indexOf('.'); return d >= 0 ? k.substring(d + 1) : k; },
+                        Collectors.counting()));
                 Map<String, Object> clean = new LinkedHashMap<>();
                 row.forEach((k, v) -> {
                     int dot = k.indexOf('.');
-                    clean.put(dot >= 0 ? k.substring(dot + 1) : k, v);
+                    String bare = dot >= 0 ? k.substring(dot + 1) : k;
+                    clean.put(nameCount.get(bare) > 1 ? k.replace('.', '_') : bare, v);
                 });
                 return clean;
             }).collect(Collectors.toList());
@@ -326,16 +335,6 @@ public class QueryEngine {
             stores.add(t.store() != null ? t.store() : t.table());
         }
         return stores;
-    }
-
-    private void validateStores(SelectStatement stmt) {
-        List<TableRef> refs = new ArrayList<>();
-        refs.add(stmt.from());
-        stmt.joins().forEach(j -> refs.add(j.table()));
-        refs.forEach(ref -> {
-            String name = ref.store() != null ? ref.store() : ref.table();
-            if (!registry.exists(name)) throw new IllegalArgumentException("Store not registered: '" + name + "'");
-        });
     }
 
     public MaterializedViewCache viewCache() { return viewCache; }

@@ -7,9 +7,27 @@ import { environment } from '../../environments/environment';
 export class AuthService {
   private readonly http = inject(HttpClient);
 
-  readonly token = signal<string | null>(localStorage.getItem('ps_token'));
+  readonly token = signal<string | null>(this.loadValidToken());
   readonly username = signal<string | null>(localStorage.getItem('ps_user'));
   readonly isLoggedIn = computed(() => !!this.token());
+
+  private loadValidToken(): string | null {
+    const token = localStorage.getItem('ps_token');
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        localStorage.removeItem('ps_token');
+        localStorage.removeItem('ps_user');
+        return null;
+      }
+      return token;
+    } catch {
+      localStorage.removeItem('ps_token');
+      localStorage.removeItem('ps_user');
+      return null;
+    }
+  }
 
   login(username: string, password: string) {
     return this.http

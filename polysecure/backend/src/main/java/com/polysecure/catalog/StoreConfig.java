@@ -9,5 +9,12 @@ public record StoreConfig(
     String username,
     String password
 ) {
-    public enum StoreType { POSTGRES, MONGODB, NEO4J }
+    public enum StoreType {
+        // Original
+        POSTGRES, MONGODB, NEO4J,
+        // JDBC relational
+        MYSQL, MARIADB, SQLSERVER, ORACLE, SNOWFLAKE, CLICKHOUSE,
+        // NoSQL / Search / Streaming
+        ELASTICSEARCH, REDIS, CASSANDRA, SOLR, KAFKA
+    }
 }

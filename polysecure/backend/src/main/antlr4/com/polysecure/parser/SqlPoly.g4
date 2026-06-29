@@ -32,10 +32,18 @@ tableRef
 joinClause : K_JOIN tableRef K_ON condition ;
 
 condition
-    : LPAREN condition RPAREN                              # ParenCondition
-    | left=condition K_OR  right=condition                 # OrCondition
-    | left=condition K_AND right=condition                 # AndCondition
-    | left=expr op=compOp  right=expr                      # CompareCondition
+    : LPAREN condition RPAREN                                              # ParenCondition
+    | K_NOT condition                                                      # NotCondition
+    | left=condition K_OR  right=condition                                 # OrCondition
+    | left=condition K_AND right=condition                                 # AndCondition
+    | left=expr op=compOp  right=expr                                      # CompareCondition
+    | expr K_NOT K_IN  LPAREN literal (COMMA literal)* RPAREN             # NotInCondition
+    | expr K_IN        LPAREN literal (COMMA literal)* RPAREN             # InCondition
+    | expr K_IS K_NOT K_NULL                                               # IsNotNullCondition
+    | expr K_IS K_NULL                                                     # IsNullCondition
+    | expr K_NOT K_LIKE val=STRING_LITERAL                                 # NotLikeCondition
+    | expr K_LIKE val=STRING_LITERAL                                       # LikeCondition
+    | expr K_BETWEEN low=literal K_AND high=literal                        # BetweenCondition
     ;
 
 compOp : EQ | NEQ | GT | LT | GTE | LTE ;
@@ -136,6 +144,11 @@ K_POLYSTORE : P O L Y S T O R E ;
 K_STORE     : S T O R E ;
 K_PRIMARY   : P R I M A R Y ;
 K_KEY       : K E Y ;
+K_NOT       : N O T ;
+K_IN        : I N ;
+K_IS        : I S ;
+K_LIKE      : L I K E ;
+K_BETWEEN   : B E T W E E N ;
 
 EQ        : '=' ;
 NEQ       : '!=' | '<>' ;
@@ -151,8 +164,10 @@ RPAREN    : ')' ;
 SEMICOLON : ';' ;
 
 STRING_LITERAL : '\'' (~'\'' | '\'\'')* '\'' ;
-NUMBER         : [0-9]+ ('.' [0-9]+)? ;
+NUMBER         : '-'? [0-9]+ ('.' [0-9]+)? ;
 IDENTIFIER     : [a-zA-Z_][a-zA-Z0-9_]* ;
+LINE_COMMENT   : '--' ~[\r\n]* -> skip ;
+BLOCK_COMMENT  : '/*' .*? '*/' -> skip ;
 WS             : [ \t\r\n]+ -> skip ;
 
 fragment A:[Aa]; fragment B:[Bb]; fragment C:[Cc]; fragment D:[Dd]; fragment E:[Ee];

@@ -1,6 +1,7 @@
 package com.polysecure.engine;
 
 import com.polysecure.adapter.AdapterFactory;
+import com.polysecure.config.PersistenceService;
 import com.polysecure.engine.MaterializedViewCache;
 import com.polysecure.catalog.MetadataCatalog;
 import com.polysecure.catalog.StoreConfig;
@@ -71,12 +72,16 @@ class QueryEngineIntegrationTest {
             mongo.getHost(), mongo.getMappedPort(27017), "test", null, null));
 
         TransactionCoordinator tx = new TransactionCoordinator();
-        DdlExecutor ddl = new DdlExecutor(catalog, registry, tx);
+        LinearCostModel costModel = new LinearCostModel();
+        PersistenceService persistence = new PersistenceService(registry, catalog, costModel,
+            System.getProperty("java.io.tmpdir") + "/polysecure-test");
+        DdlExecutor ddl = new DdlExecutor(catalog, registry, tx, persistence);
         DmlExecutor dml = new DmlExecutor(catalog, registry, tx);
         viewCache = new MaterializedViewCache();
         StatsRegistry stats = new StatsRegistry(registry);
-        CostEstimator cost = new CostEstimator(stats, new LinearCostModel());
-        engine = new QueryEngine(new SqlPolyFacade(), registry, ddl, dml, viewCache, cost);
+        CostEstimator cost = new CostEstimator(stats, costModel);
+        SemanticValidator validator = new SemanticValidator(registry, catalog);
+        engine = new QueryEngine(new SqlPolyFacade(), registry, ddl, dml, viewCache, cost, validator);
     }
 
     @BeforeEach

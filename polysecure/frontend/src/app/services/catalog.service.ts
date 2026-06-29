@@ -4,9 +4,14 @@ import { forkJoin, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ColumnDef } from '../models/types';
 
+export type StoreType =
+  | 'POSTGRES' | 'MONGODB' | 'NEO4J'
+  | 'MYSQL' | 'MARIADB' | 'SQLSERVER' | 'ORACLE' | 'SNOWFLAKE' | 'CLICKHOUSE'
+  | 'ELASTICSEARCH' | 'REDIS' | 'CASSANDRA' | 'SOLR' | 'KAFKA';
+
 export interface StorePayload {
   name: string;
-  type: 'POSTGRES' | 'MONGODB' | 'NEO4J';
+  type: StoreType;
   host: string;
   port: number;
   database: string;

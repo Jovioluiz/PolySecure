@@ -4,9 +4,10 @@ import { KeyValuePipe } from '@angular/common';
 import { CatalogService, StorePayload } from '../../services/catalog.service';
 
 const DEFAULT_PORTS: Record<string, number> = {
-  POSTGRES: 5432,
-  MONGODB: 27017,
-  NEO4J: 7687,
+  POSTGRES: 5432, MONGODB: 27017, NEO4J: 7687,
+  MYSQL: 3306, MARIADB: 3306, SQLSERVER: 1433, ORACLE: 1521,
+  SNOWFLAKE: 443, CLICKHOUSE: 8123,
+  ELASTICSEARCH: 9200, REDIS: 6379, CASSANDRA: 9042, SOLR: 8983, KAFKA: 9092,
 };
 
 @Component({

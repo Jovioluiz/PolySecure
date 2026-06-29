@@ -26,6 +26,12 @@ export class App {
 
   @ViewChild(EditorPanel) private editorPanel?: EditorPanel;
 
+  constructor() {
+    if (this.auth.isLoggedIn()) {
+      this.catalog.load();
+    }
+  }
+
   protected onLoggedIn() {
     this.catalog.load();
   }

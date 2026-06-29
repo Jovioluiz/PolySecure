@@ -4,7 +4,7 @@ import com.polysecure.catalog.StoreConfig.StoreType;
 
 public record RegisterStoreRequest(
     String name,
-    StoreType type,     // POSTGRES, MONGODB, NEO4J
+    StoreType type,
     String host,
     int port,
     String database,

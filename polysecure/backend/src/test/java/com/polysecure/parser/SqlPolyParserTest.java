@@ -204,4 +204,84 @@ class SqlPolyParserTest {
         assertThat(cmp.op()).isEqualTo("=");
         assertThat(((Expr.Literal) cmp.right()).value()).isEqualTo(true);
     }
+
+    // ── New operators ────────────────────────────────────────────────────────
+
+    @Test
+    void parsesInCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE id IN (1, 2, 3)");
+        var in = (Condition.In) stmt.where();
+        assertThat(in.values()).containsExactly(1.0, 2.0, 3.0);
+    }
+
+    @Test
+    void parsesNotInCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE id NOT IN (5, 6)");
+        var not = (Condition.Not) stmt.where();
+        var in = (Condition.In) not.inner();
+        assertThat(in.values()).containsExactly(5.0, 6.0);
+    }
+
+    @Test
+    void parsesIsNullCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.users WHERE email IS NULL");
+        assertThat(stmt.where()).isInstanceOf(Condition.IsNull.class);
+        var isn = (Condition.IsNull) stmt.where();
+        assertThat(((Expr.Column) isn.expr()).name()).isEqualTo("email");
+    }
+
+    @Test
+    void parsesIsNotNullCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.users WHERE email IS NOT NULL");
+        var not = (Condition.Not) stmt.where();
+        assertThat(not.inner()).isInstanceOf(Condition.IsNull.class);
+    }
+
+    @Test
+    void parsesLikeCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.users WHERE name LIKE 'Jo%'");
+        var like = (Condition.Like) stmt.where();
+        assertThat(like.pattern()).isEqualTo("Jo%");
+        assertThat(((Expr.Column) like.expr()).name()).isEqualTo("name");
+    }
+
+    @Test
+    void parsesNotLikeCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.users WHERE name NOT LIKE '%test%'");
+        var not = (Condition.Not) stmt.where();
+        assertThat(not.inner()).isInstanceOf(Condition.Like.class);
+    }
+
+    @Test
+    void parsesNotCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.users WHERE NOT (active = false)");
+        var not = (Condition.Not) stmt.where();
+        assertThat(not.inner()).isInstanceOf(Condition.Compare.class);
+    }
+
+    @Test
+    void parsesBetweenCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE total BETWEEN 10.0 AND 100.0");
+        var between = (Condition.Between) stmt.where();
+        assertThat(between.low()).isEqualTo(10.0);
+        assertThat(between.high()).isEqualTo(100.0);
+        assertThat(((Expr.Column) between.expr()).name()).isEqualTo("total");
+    }
+
+    @Test
+    void parsesBetweenWithAndCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE total BETWEEN 10 AND 100 AND active = true");
+        var and = (Condition.And) stmt.where();
+        assertThat(and.left()).isInstanceOf(Condition.Between.class);
+        assertThat(and.right()).isInstanceOf(Condition.Compare.class);
+    }
 }

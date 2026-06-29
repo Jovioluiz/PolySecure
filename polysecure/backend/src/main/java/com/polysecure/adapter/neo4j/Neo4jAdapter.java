@@ -1,6 +1,7 @@
 package com.polysecure.adapter.neo4j;
 
 import com.polysecure.adapter.StoreAdapter;
+import com.polysecure.adapter.StoreCapabilities;
 import com.polysecure.catalog.StoreConfig;
 import com.polysecure.model.*;
 import org.neo4j.driver.*;
@@ -115,6 +116,12 @@ public class Neo4jAdapter implements StoreAdapter {
     }
 
     @Override
+    public StoreCapabilities getCapabilities() {
+        // Neo4j supports graph traversal; UPDATE is done via SET but partial; no relational transactions
+        return new StoreCapabilities(true, true, true, true, true, false);
+    }
+
+    @Override
     public void close() { driver.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -158,6 +165,7 @@ public class Neo4jAdapter implements StoreAdapter {
             return switch (cond) {
                 case Condition.And a -> "(" + renderCondition(a.left()) + " AND " + renderCondition(a.right()) + ")";
                 case Condition.Or  o -> "(" + renderCondition(o.left()) + " OR "  + renderCondition(o.right()) + ")";
+                case Condition.Not n -> "NOT (" + renderCondition(n.inner()) + ")";
                 case Condition.Compare c -> renderCompare(c);
                 case Condition.In i -> {
                     if (!(i.expr() instanceof Expr.Column col)) yield "true";
@@ -165,7 +173,40 @@ public class Neo4jAdapter implements StoreAdapter {
                     params.put(name, i.values());
                     yield "n." + col.name() + " IN $" + name;
                 }
+                case Condition.IsNull isn -> {
+                    if (!(isn.expr() instanceof Expr.Column col)) yield "true";
+                    yield "n." + col.name() + " IS NULL";
+                }
+                case Condition.Like like -> {
+                    if (!(like.expr() instanceof Expr.Column col)) yield "true";
+                    String name = "p" + counter++;
+                    params.put(name, likeToRegex(like.pattern()));
+                    yield "n." + col.name() + " =~ $" + name;
+                }
+                case Condition.Between between -> {
+                    if (!(between.expr() instanceof Expr.Column col)) yield "true";
+                    String lo = "p" + counter++;
+                    String hi = "p" + counter++;
+                    params.put(lo, between.low());
+                    params.put(hi, between.high());
+                    yield "(n." + col.name() + " >= $" + lo + " AND n." + col.name() + " <= $" + hi + ")";
+                }
             };
+        }
+
+        private String likeToRegex(String pattern) {
+            StringBuilder regex = new StringBuilder("(?s)");
+            for (int i = 0; i < pattern.length(); i++) {
+                char c = pattern.charAt(i);
+                if (c == '%') {
+                    regex.append(".*");
+                } else if (c == '_') {
+                    regex.append(".");
+                } else {
+                    regex.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+                }
+            }
+            return regex.toString();
         }
 
         private String renderCompare(Condition.Compare c) {

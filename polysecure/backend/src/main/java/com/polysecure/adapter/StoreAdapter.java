@@ -26,5 +26,11 @@ public interface StoreAdapter {
     // Phase 4 — Statistics
     long estimateCardinality(String table);
 
+    // Introspection — returns native column schema for the given table
+    default List<ColumnDefinition> getSchema(String table) { return List.of(); }
+
+    // Capability declaration — what operations this store supports
+    StoreCapabilities getCapabilities();
+
     void close();
 }

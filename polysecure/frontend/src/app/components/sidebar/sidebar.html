@@ -21,9 +21,26 @@
         <div class="form-field">
           <label>Tipo</label>
           <select [(ngModel)]="form.type" (ngModelChange)="onTypeChange()">
-            <option value="POSTGRES">PostgreSQL</option>
-            <option value="MONGODB">MongoDB</option>
-            <option value="NEO4J">Neo4j</option>
+            <optgroup label="Relacionais">
+              <option value="POSTGRES">PostgreSQL</option>
+              <option value="MYSQL">MySQL</option>
+              <option value="MARIADB">MariaDB</option>
+              <option value="SQLSERVER">SQL Server</option>
+              <option value="ORACLE">Oracle</option>
+              <option value="SNOWFLAKE">Snowflake</option>
+              <option value="CLICKHOUSE">ClickHouse</option>
+            </optgroup>
+            <optgroup label="NoSQL / Grafos">
+              <option value="MONGODB">MongoDB</option>
+              <option value="NEO4J">Neo4j</option>
+              <option value="REDIS">Redis</option>
+              <option value="CASSANDRA">Cassandra</option>
+            </optgroup>
+            <optgroup label="Busca / Streaming">
+              <option value="ELASTICSEARCH">Elasticsearch</option>
+              <option value="SOLR">Apache Solr</option>
+              <option value="KAFKA">Apache Kafka</option>
+            </optgroup>
           </select>
         </div>
         <div class="form-row">

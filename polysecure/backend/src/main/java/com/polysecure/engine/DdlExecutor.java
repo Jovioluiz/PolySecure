@@ -2,6 +2,7 @@ package com.polysecure.engine;
 
 import com.polysecure.catalog.MetadataCatalog;
 import com.polysecure.catalog.StoreRegistry;
+import com.polysecure.config.PersistenceService;
 import com.polysecure.model.CreateTableStatement;
 import com.polysecure.model.ColumnDefinition;
 import com.polysecure.model.DropTableStatement;
@@ -18,11 +19,14 @@ public class DdlExecutor {
     private final MetadataCatalog catalog;
     private final StoreRegistry registry;
     private final TransactionCoordinator tx;
+    private final PersistenceService persistence;
 
-    public DdlExecutor(MetadataCatalog catalog, StoreRegistry registry, TransactionCoordinator tx) {
+    public DdlExecutor(MetadataCatalog catalog, StoreRegistry registry,
+                       TransactionCoordinator tx, PersistenceService persistence) {
         this.catalog = catalog;
         this.registry = registry;
         this.tx = tx;
+        this.persistence = persistence;
     }
 
     public DmlResult createTable(CreateTableStatement stmt) {
@@ -46,6 +50,7 @@ public class DdlExecutor {
         // Register in catalog first so rollback can reference it
         tx.run(ops);
         catalog.register(stmt);
+        persistence.saveCatalog();
 
         return new DmlResult("CREATE", stmt.tableName(),
             stores.stream().collect(Collectors.toMap(s -> s, s -> 0)),
@@ -65,6 +70,7 @@ public class DdlExecutor {
 
         tx.run(ops);
         catalog.unregister(stmt.tableName());
+        persistence.saveCatalog();
 
         return new DmlResult("DROP", stmt.tableName(),
             stores.stream().collect(Collectors.toMap(s -> s, s -> 0)),

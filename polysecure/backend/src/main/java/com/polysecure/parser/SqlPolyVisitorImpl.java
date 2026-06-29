@@ -77,6 +77,11 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
     }
 
     @Override
+    public Condition visitNotCondition(SqlPolyParser.NotConditionContext ctx) {
+        return new Condition.Not((Condition) visit(ctx.condition()));
+    }
+
+    @Override
     public Condition visitAndCondition(SqlPolyParser.AndConditionContext ctx) {
         return new Condition.And((Condition) visit(ctx.left), (Condition) visit(ctx.right));
     }
@@ -89,6 +94,54 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
     @Override
     public Condition visitCompareCondition(SqlPolyParser.CompareConditionContext ctx) {
         return new Condition.Compare((Expr) visit(ctx.left), ctx.op.getText(), (Expr) visit(ctx.right));
+    }
+
+    @Override
+    public Condition visitInCondition(SqlPolyParser.InConditionContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        List<Object> values = ctx.literal().stream().map(this::parseLiteralCtx).collect(Collectors.toList());
+        return new Condition.In(expr, values);
+    }
+
+    @Override
+    public Condition visitNotInCondition(SqlPolyParser.NotInConditionContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        List<Object> values = ctx.literal().stream().map(this::parseLiteralCtx).collect(Collectors.toList());
+        return new Condition.Not(new Condition.In(expr, values));
+    }
+
+    @Override
+    public Condition visitIsNullCondition(SqlPolyParser.IsNullConditionContext ctx) {
+        return new Condition.IsNull((Expr) visit(ctx.expr()));
+    }
+
+    @Override
+    public Condition visitIsNotNullCondition(SqlPolyParser.IsNotNullConditionContext ctx) {
+        return new Condition.Not(new Condition.IsNull((Expr) visit(ctx.expr())));
+    }
+
+    @Override
+    public Condition visitLikeCondition(SqlPolyParser.LikeConditionContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        String raw = ctx.val.getText();
+        String pattern = raw.substring(1, raw.length() - 1).replace("''", "'");
+        return new Condition.Like(expr, pattern);
+    }
+
+    @Override
+    public Condition visitNotLikeCondition(SqlPolyParser.NotLikeConditionContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        String raw = ctx.val.getText();
+        String pattern = raw.substring(1, raw.length() - 1).replace("''", "'");
+        return new Condition.Not(new Condition.Like(expr, pattern));
+    }
+
+    @Override
+    public Condition visitBetweenCondition(SqlPolyParser.BetweenConditionContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        Object low = parseLiteralCtx(ctx.low);
+        Object high = parseLiteralCtx(ctx.high);
+        return new Condition.Between(expr, low, high);
     }
 
     @Override

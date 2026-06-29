@@ -1,6 +1,7 @@
 package com.polysecure.api;
 
 import com.polysecure.api.dto.ErrorResponse;
+import com.polysecure.engine.SemanticException;
 import com.polysecure.parser.ParseException;
 import com.polysecure.security.rbac.ForbiddenException;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleParse(ParseException ex) {
         return ResponseEntity.badRequest()
             .body(new ErrorResponse("PARSE_ERROR", ex.getMessage()));
+    }
+
+    @ExceptionHandler(SemanticException.class)
+    public ResponseEntity<ErrorResponse> handleSemantic(SemanticException ex) {
+        return ResponseEntity.badRequest()
+            .body(new ErrorResponse("SEMANTIC_ERROR", ex.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

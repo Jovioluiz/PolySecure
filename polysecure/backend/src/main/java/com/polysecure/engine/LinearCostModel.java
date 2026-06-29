@@ -42,4 +42,11 @@ public class LinearCostModel {
 
     public synchronized double[] weights() { return weights.clone(); }
     public long sampleCount() { return sampleCount.get(); }
+
+    public synchronized void loadWeights(double[] savedWeights, long savedSamples) {
+        if (savedWeights != null && savedWeights.length == weights.length) {
+            System.arraycopy(savedWeights, 0, weights, 0, weights.length);
+        }
+        sampleCount.set(savedSamples);
+    }
 }
