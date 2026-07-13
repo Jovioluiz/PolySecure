@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\jovio\\\\Documents\\\\Polystores\\\\Polystores\")",
+      "Bash(Sort-Object LastWriteTime -Descending)",
+      "Bash(Select-Object Name, LastWriteTime, Length)",
+      "Bash(mvn test *)",
+      "Bash(docker --version)",
+      "Bash(docker info *)",
+      "mcp__claude_ai_Google_Drive__search_files",
+      "mcp__claude_ai_Google_Drive__read_file_content",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(5000, 6000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(11000, 7000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(18000, 8000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(26000, 8000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(60000, 8000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(100000, 8000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(108000, 8000\\))",
+      "PowerShell($content = Get-Content -Raw -Path 'C:\\\\Users\\\\jovio\\\\.claude\\\\projects\\\\C--Users-jovio-Documents-Polystores-Polystores\\\\ec1b1b94-fc5c-44f7-88c3-f12d122edcaa\\\\tool-results\\\\mcp-claude_ai_Google_Drive-read_file_content-1779370752485.txt' -Encoding UTF8; $json = $content | ConvertFrom-Json; $fc = $json.fileContent; Write-Host $fc.Substring\\(130000, 10000\\))",
+      "Bash(mvn -Dtest=\"SqlPolyParserTest,SecurityLayerTest\" test)",
+      "Bash(mvn test-compile *)",
+      "Bash(mvn -Dtest=SqlPolyParserTest test)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\jovio\\\\Documents\\\\Polystores\\\\Polystores\\\\polysecure\" -Recurse -Force | Where-Object { -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "PowerShell(head *)",
+      "Bash(mvn compile *)"
+    ]
+  }
+}

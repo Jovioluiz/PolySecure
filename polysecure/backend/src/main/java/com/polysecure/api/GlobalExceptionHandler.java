@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.api;
 
 import com.polysecure.api.dto.ErrorResponse;
@@ -29,6 +35,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalArg(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
             .body(new ErrorResponse("INVALID_ARGUMENT", ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.badRequest()
+            .body(new ErrorResponse("JOIN_TOO_EXPENSIVE", ex.getMessage()));
     }
 
     @ExceptionHandler(ForbiddenException.class)

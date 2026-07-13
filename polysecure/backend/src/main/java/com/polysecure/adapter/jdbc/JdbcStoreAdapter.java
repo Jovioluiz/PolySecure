@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.jdbc;
 
 import com.polysecure.adapter.StoreAdapter;
@@ -119,6 +125,14 @@ public abstract class JdbcStoreAdapter implements StoreAdapter {
     }
 
     @Override public void close() { dataSource.close(); }
+
+    @Override
+    public boolean ping() {
+        try { jdbc.queryForObject(pingQuery(), Integer.class); return true; }
+        catch (Exception e) { return false; }
+    }
+
+    protected String pingQuery() { return "SELECT 1"; }
 
     protected abstract String toSqlType(String type);
 }

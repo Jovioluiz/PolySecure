@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.mongodb;
 
 import com.mongodb.client.*;
@@ -102,6 +108,12 @@ public class MongoAdapter implements StoreAdapter {
     public StoreCapabilities getCapabilities() {
         // MongoDB is schema-less — DDL is limited (no ALTER, no constraints beyond simple ones)
         return new StoreCapabilities(true, true, true, true, false, false);
+    }
+
+    @Override
+    public boolean ping() {
+        try { database.runCommand(new Document("ping", 1)); return true; }
+        catch (Exception e) { return false; }
     }
 
     @Override

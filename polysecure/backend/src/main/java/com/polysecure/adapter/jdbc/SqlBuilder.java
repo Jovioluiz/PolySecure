@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.jdbc;
 
 import com.polysecure.model.*;
@@ -87,6 +93,8 @@ public final class SqlBuilder {
                 ? col.tableAlias() + "." + col.name() : col.name();
             case Expr.Literal lit -> { params.add(lit.value()); yield "?"; }
             case Expr.Star s -> s.tableAlias() != null ? s.tableAlias() + ".*" : "*";
+            case Expr.Aggregate agg -> agg.func().toUpperCase() + "("
+                + (agg.arg() instanceof Expr.Star ? "*" : renderExpr(agg.arg())) + ")";
         };
     }
 

@@ -1,6 +1,14 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.api;
 
 import com.polysecure.api.dto.CreateUserRequest;
+import com.polysecure.catalog.StoreConfig;
+import com.polysecure.catalog.StoreRegistry;
 import com.polysecure.engine.CostEstimator;
 import com.polysecure.engine.MaterializedViewCache;
 import com.polysecure.engine.QueryEngine;
@@ -12,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -25,16 +34,19 @@ public class AdminController {
     private final AuditLogger auditLogger;
     private final MaterializedViewCache viewCache;
     private final CostEstimator costEstimator;
+    private final StoreRegistry storeRegistry;
 
     public AdminController(UserRegistry userRegistry,
                            RoleRegistry roleRegistry,
                            AuditLogger auditLogger,
-                           QueryEngine engine) {
+                           QueryEngine engine,
+                           StoreRegistry storeRegistry) {
         this.userRegistry = userRegistry;
         this.roleRegistry = roleRegistry;
         this.auditLogger = auditLogger;
         this.viewCache = engine.viewCache();
         this.costEstimator = engine.costEstimator();
+        this.storeRegistry = storeRegistry;
     }
 
     @PostMapping("/users")
@@ -106,6 +118,22 @@ public class AdminController {
         ));
     }
 
+    @GetMapping("/health")
+    @PreAuthorize("hasRole('DBA_ADMIN')")
+    public ResponseEntity<?> getStoreHealth() {
+        List<StoreHealth> result = new ArrayList<>();
+        for (StoreConfig cfg : storeRegistry.getConfigs()) {
+            long t0 = System.currentTimeMillis();
+            boolean up;
+            try { up = storeRegistry.get(cfg.name()).ping(); }
+            catch (Exception e) { up = false; }
+            long latencyMs = System.currentTimeMillis() - t0;
+            result.add(new StoreHealth(cfg.name(), cfg.type().name(), up ? "UP" : "DOWN", latencyMs));
+        }
+        return ResponseEntity.ok(result);
+    }
+
     private record UserSummary(String username, String roleName) {}
     private record RoleSummary(String name, java.util.Set<String> stores, String anonymizationPolicy) {}
+    private record StoreHealth(String name, String type, String status, long latencyMs) {}
 }

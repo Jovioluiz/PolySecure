@@ -1,5 +1,14 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.engine;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -24,6 +33,14 @@ public class MaterializedViewCache {
 
     private final ConcurrentHashMap<String, CachedView> views = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> frequency = new ConcurrentHashMap<>();
+    private final Counter cacheHits;
+    private final Counter cacheMisses;
+
+    public MaterializedViewCache(MeterRegistry meterRegistry) {
+        this.cacheHits = Counter.builder("polysecure.viewcache.hits").register(meterRegistry);
+        this.cacheMisses = Counter.builder("polysecure.viewcache.misses").register(meterRegistry);
+        Gauge.builder("polysecure.viewcache.size", views, Map::size).register(meterRegistry);
+    }
 
     record CachedView(
         List<Map<String, Object>> rows,
@@ -38,12 +55,14 @@ public class MaterializedViewCache {
      */
     public Optional<List<Map<String, Object>>> get(String key) {
         CachedView view = views.get(key);
-        if (view == null) return Optional.empty();
+        if (view == null) { cacheMisses.increment(); return Optional.empty(); }
         if (Instant.now().isAfter(view.cachedAt().plus(TTL))) {
             views.remove(key);
+            cacheMisses.increment();
             return Optional.empty();
         }
         view.hits().incrementAndGet();
+        cacheHits.increment();
         return Optional.of(view.rows());
     }
 

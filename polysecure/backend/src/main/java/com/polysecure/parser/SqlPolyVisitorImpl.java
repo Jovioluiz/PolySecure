@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.parser;
 
 import com.polysecure.model.*;
@@ -11,13 +17,27 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
 
     @Override
     public Statement visitQuery(SqlPolyParser.QueryContext ctx) {
-        if (ctx.selectStatement()        != null) return visitSelectStatement(ctx.selectStatement());
+        if (!ctx.selectStatement().isEmpty()) {
+            SelectStatement first = visitSelectStatement(ctx.selectStatement().get(0));
+            if (ctx.K_UNION() != null) {
+                SelectStatement second = visitSelectStatement(ctx.selectStatement().get(1));
+                return new UnionStatement(first, ctx.K_ALL() != null, second);
+            }
+            if (ctx.K_EXCEPT() != null) {
+                SelectStatement second = visitSelectStatement(ctx.selectStatement().get(1));
+                return new ExceptStatement(first, second);
+            }
+            return first;
+        }
         if (ctx.insertStatement()        != null) return visitInsertStatement(ctx.insertStatement());
         if (ctx.insertSelectStatement()  != null) return visitInsertSelectStatement(ctx.insertSelectStatement());
         if (ctx.updateStatement()        != null) return visitUpdateStatement(ctx.updateStatement());
         if (ctx.deleteStatement()        != null) return visitDeleteStatement(ctx.deleteStatement());
         if (ctx.createTableStatement()   != null) return visitCreateTableStatement(ctx.createTableStatement());
         if (ctx.dropTableStatement()     != null) return visitDropTableStatement(ctx.dropTableStatement());
+        if (ctx.createIndexStatement()   != null) return visitCreateIndexStatement(ctx.createIndexStatement());
+        if (ctx.alterTableStatement()    != null) return (Statement) visit(ctx.alterTableStatement());
+        if (ctx.registerStoreStatement() != null) return visitRegisterStoreStatement(ctx.registerStoreStatement());
         throw new ParseException("Unknown statement type");
     }
 
@@ -34,8 +54,17 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
         List<JoinClause> joins = ctx.joinClause().stream()
             .map(j -> (JoinClause) visit(j))
             .collect(Collectors.toList());
-        Condition where = ctx.condition() != null ? (Condition) visit(ctx.condition()) : null;
-        return new SelectStatement(star, projections, from, joins, where);
+        Condition where = ctx.whereClause != null ? (Condition) visit(ctx.whereClause) : null;
+        List<Expr> groupBy = ctx.groupByList() != null
+            ? ctx.groupByList().expr().stream().map(e -> (Expr) visit(e)).collect(Collectors.toList())
+            : List.of();
+        Condition having = ctx.havingClause != null ? (Condition) visit(ctx.havingClause) : null;
+        List<OrderItem> orderBy = ctx.orderByList() != null
+            ? ctx.orderByList().orderByItem().stream().map(this::visitOrderByItem).collect(Collectors.toList())
+            : List.of();
+        Integer limit = ctx.limit != null ? (int) Double.parseDouble(ctx.limit.getText()) : null;
+        Integer offset = ctx.offset != null ? (int) Double.parseDouble(ctx.offset.getText()) : null;
+        return new SelectStatement(star, projections, from, joins, where, groupBy, having, orderBy, limit, offset);
     }
 
     @Override
@@ -43,10 +72,18 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
         String alias = ctx.alias != null ? ctx.alias.getText() : null;
         Object exprResult = visit(ctx.expr());
         return switch (exprResult) {
-            case Expr.Column col -> new ColumnRef(col.tableAlias(), col.name(),
-                alias != null ? alias : col.name());
+            // Leave outputAlias null when no explicit AS was given — ColumnRef.effectiveOutputName()
+            // already falls back to the column name, and QueryEngine's projection step needs to
+            // distinguish "no alias given" (to auto-disambiguate cross-store name collisions like
+            // "s.nome, m.nome") from an explicit AS.
+            case Expr.Column col -> new ColumnRef(col.tableAlias(), col.name(), alias);
             case Expr.Star star  -> new ColumnRef(star.tableAlias(), "*", alias);
             case Expr.Literal lit -> new ColumnRef(null, String.valueOf(lit.value()), alias);
+            case Expr.Aggregate agg -> {
+                String colStr = aggToStr(agg);
+                String outAlias = alias != null ? alias : colStr;
+                yield new ColumnRef(null, colStr, outAlias, agg);
+            }
             default -> throw new ParseException("Invalid expression in SELECT: " + ctx.getText());
         };
     }
@@ -144,6 +181,19 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
         return new Condition.Between(expr, low, high);
     }
 
+    // ── Expressions ──────────────────────────────────────────────────────────
+
+    @Override
+    public Expr visitAggregateStar(SqlPolyParser.AggregateStarContext ctx) {
+        return new Expr.Aggregate(ctx.func.getText().toUpperCase(), new Expr.Star(null));
+    }
+
+    @Override
+    public Expr visitAggregateExpr(SqlPolyParser.AggregateExprContext ctx) {
+        Expr arg = (Expr) visit(ctx.arg);
+        return new Expr.Aggregate(ctx.func.getText().toUpperCase(), arg);
+    }
+
     @Override
     public Expr visitQualifiedColumn(SqlPolyParser.QualifiedColumnContext ctx) {
         return new Expr.Column(ctx.qualifier.getText(), ctx.col.getText());
@@ -162,6 +212,14 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
     @Override
     public Expr visitLiteralVal(SqlPolyParser.LiteralValContext ctx) {
         return new Expr.Literal(parseLiteralCtx(ctx.val));
+    }
+
+    // ── ORDER BY ─────────────────────────────────────────────────────────────
+
+    public OrderItem visitOrderByItem(SqlPolyParser.OrderByItemContext ctx) {
+        Expr expr = (Expr) visit(ctx.expr());
+        boolean desc = ctx.K_DESC() != null;
+        return new OrderItem(expr, desc);
     }
 
     // ── INSERT (values) ──────────────────────────────────────────────────────
@@ -260,7 +318,51 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
         return new DropTableStatement(ctx.tableName().getText());
     }
 
-    // ── Literal parsing ──────────────────────────────────────────────────────
+    // ── CREATE INDEX ─────────────────────────────────────────────────────────
+
+    @Override
+    public CreateIndexStatement visitCreateIndexStatement(SqlPolyParser.CreateIndexStatementContext ctx) {
+        String indexName = ctx.name.getText();
+        String storeName = ctx.store.getText();
+        String table = ctx.table.getText();
+        List<String> columns = ctx.columnName().stream()
+            .map(c -> c.getText())
+            .collect(Collectors.toList());
+        return new CreateIndexStatement(indexName, storeName, table, columns);
+    }
+
+    // ── ALTER TABLE ──────────────────────────────────────────────────────────
+
+    @Override
+    public AlterTableStatement visitAlterAddColumn(SqlPolyParser.AlterAddColumnContext ctx) {
+        String table = ctx.tableName().getText();
+        ColumnDefinition col = visitColumnDef(ctx.columnDef());
+        return new AlterTableStatement(table, AlterTableStatement.AlterOp.ADD_COLUMN, col, null, null);
+    }
+
+    @Override
+    public AlterTableStatement visitAlterDropColumn(SqlPolyParser.AlterDropColumnContext ctx) {
+        String table = ctx.tableName().getText();
+        String colName = ctx.col.getText();
+        String storeName = ctx.storeName().getText();
+        return new AlterTableStatement(table, AlterTableStatement.AlterOp.DROP_COLUMN, null, colName, storeName);
+    }
+
+    // ── REGISTER STORE ───────────────────────────────────────────────────────
+
+    @Override
+    public RegisterStoreStatement visitRegisterStoreStatement(SqlPolyParser.RegisterStoreStatementContext ctx) {
+        String name = ctx.name.getText();
+        String storeType = ctx.storeType.getText();
+        String host = stripQuotes(ctx.host.getText());
+        int port = (int) Double.parseDouble(ctx.port.getText());
+        String database = stripQuotes(ctx.db.getText());
+        String username = ctx.user != null ? stripQuotes(ctx.user.getText()) : null;
+        String password = ctx.pass != null ? stripQuotes(ctx.pass.getText()) : null;
+        return new RegisterStoreStatement(name, storeType, host, port, database, username, password);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private Object parseLiteralCtx(SqlPolyParser.LiteralContext ctx) {
         if (ctx.STRING_LITERAL() != null) {
@@ -272,5 +374,23 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
         if (ctx.K_FALSE() != null) return false;
         if (ctx.K_NULL()  != null) return null;
         throw new ParseException("Unknown literal: " + ctx.getText());
+    }
+
+    private String stripQuotes(String s) {
+        if (s.length() >= 2 && s.charAt(0) == '\'') {
+            return s.substring(1, s.length() - 1).replace("''", "'");
+        }
+        return s;
+    }
+
+    private String aggToStr(Expr.Aggregate agg) {
+        String argStr = switch (agg.arg()) {
+            case Expr.Star ignored -> "*";
+            case Expr.Column col -> col.tableAlias() != null
+                ? col.tableAlias() + "." + col.name() : col.name();
+            case Expr.Literal lit -> String.valueOf(lit.value());
+            case Expr.Aggregate nested -> aggToStr(nested);
+        };
+        return agg.func().toUpperCase() + "(" + argStr + ")";
     }
 }

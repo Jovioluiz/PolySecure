@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.solr;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -189,6 +195,14 @@ public class SolrAdapter implements StoreAdapter {
     @Override
     public StoreCapabilities getCapabilities() {
         return new StoreCapabilities(true, true, true, true, false, false);
+    }
+
+    @Override
+    public boolean ping() {
+        try {
+            http.get().uri("/solr/admin/info/system?wt=json").retrieve().toBodilessEntity();
+            return true;
+        } catch (Exception e) { return false; }
     }
 
     @Override public void close() {}

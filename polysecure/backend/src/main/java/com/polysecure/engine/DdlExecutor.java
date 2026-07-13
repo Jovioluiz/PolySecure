@@ -1,15 +1,20 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.engine;
 
 import com.polysecure.catalog.MetadataCatalog;
 import com.polysecure.catalog.StoreRegistry;
 import com.polysecure.config.PersistenceService;
-import com.polysecure.model.CreateTableStatement;
-import com.polysecure.model.ColumnDefinition;
-import com.polysecure.model.DropTableStatement;
+import com.polysecure.model.*;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -75,5 +80,36 @@ public class DdlExecutor {
         return new DmlResult("DROP", stmt.tableName(),
             stores.stream().collect(Collectors.toMap(s -> s, s -> 0)),
             "Table '" + stmt.tableName() + "' dropped from stores: " + String.join(", ", stores));
+    }
+
+    public DmlResult createIndex(CreateIndexStatement stmt) {
+        registry.get(stmt.storeName()).createIndex(stmt.table(), stmt.indexName(), stmt.columns());
+        return new DmlResult("CREATE_INDEX", stmt.table(),
+            Map.of(stmt.storeName(), 0),
+            "Index '" + stmt.indexName() + "' created on " + stmt.storeName() + "." + stmt.table());
+    }
+
+    public DmlResult alterTable(AlterTableStatement stmt) {
+        if (stmt.operation() == AlterTableStatement.AlterOp.ADD_COLUMN) {
+            ColumnDefinition col = stmt.addColumn();
+            registry.get(col.store()).addColumn(stmt.tableName(), col);
+            if (catalog.exists(stmt.tableName())) {
+                catalog.addColumn(stmt.tableName(), col);
+                persistence.saveCatalog();
+            }
+            return new DmlResult("ALTER_TABLE", stmt.tableName(),
+                Map.of(col.store(), 0),
+                "Column '" + col.name() + "' added to '" + stmt.tableName() + "' in store " + col.store());
+        } else {
+            registry.get(stmt.dropStoreName()).dropColumn(stmt.tableName(), stmt.dropColumnName());
+            if (catalog.exists(stmt.tableName())) {
+                catalog.removeColumn(stmt.tableName(), stmt.dropColumnName(), stmt.dropStoreName());
+                persistence.saveCatalog();
+            }
+            return new DmlResult("ALTER_TABLE", stmt.tableName(),
+                Map.of(stmt.dropStoreName(), 0),
+                "Column '" + stmt.dropColumnName() + "' dropped from '" + stmt.tableName()
+                    + "' in store " + stmt.dropStoreName());
+        }
     }
 }

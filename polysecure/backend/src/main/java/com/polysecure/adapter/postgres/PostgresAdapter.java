@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.postgres;
 
 import com.polysecure.adapter.StoreAdapter;
@@ -125,7 +131,30 @@ public class PostgresAdapter implements StoreAdapter {
     }
 
     @Override
+    public void createIndex(String table, String indexName, List<String> columns) {
+        String cols = String.join(", ", columns);
+        jdbc.execute("CREATE INDEX IF NOT EXISTS " + indexName + " ON " + table + " (" + cols + ")");
+    }
+
+    @Override
+    public void addColumn(String table, ColumnDefinition column) {
+        jdbc.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS "
+            + column.name() + " " + toSqlType(column.type()));
+    }
+
+    @Override
+    public void dropColumn(String table, String columnName) {
+        jdbc.execute("ALTER TABLE " + table + " DROP COLUMN IF EXISTS " + columnName);
+    }
+
+    @Override
     public StoreCapabilities getCapabilities() { return StoreCapabilities.full(); }
+
+    @Override
+    public boolean ping() {
+        try { jdbc.queryForObject("SELECT 1", Integer.class); return true; }
+        catch (Exception e) { return false; }
+    }
 
     @Override
     public void close() { dataSource.close(); }

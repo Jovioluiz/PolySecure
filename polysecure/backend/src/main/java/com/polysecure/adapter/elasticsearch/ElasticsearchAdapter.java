@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.elasticsearch;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -198,6 +204,12 @@ public class ElasticsearchAdapter implements StoreAdapter {
     @Override
     public StoreCapabilities getCapabilities() {
         return new StoreCapabilities(true, true, true, true, true, false);
+    }
+
+    @Override
+    public boolean ping() {
+        try { http.get().uri("/_cluster/health").retrieve().toBodilessEntity(); return true; }
+        catch (Exception e) { return false; }
     }
 
     @Override public void close() { /* RestClient is stateless */ }

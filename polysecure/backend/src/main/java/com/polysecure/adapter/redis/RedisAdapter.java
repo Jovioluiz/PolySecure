@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.redis;
 
 import com.polysecure.adapter.StoreAdapter;
@@ -153,6 +159,12 @@ public class RedisAdapter implements StoreAdapter {
         return new StoreCapabilities(true, true, true, true, false, false);
     }
 
+    @Override
+    public boolean ping() {
+        try (Jedis jedis = pool.getResource()) { return "PONG".equals(jedis.ping()); }
+        catch (Exception e) { return false; }
+    }
+
     @Override public void close() { pool.close(); }
 
     // ── Inline condition evaluation (avoids engine→adapter circular dep) ───
@@ -184,6 +196,7 @@ public class RedisAdapter implements StoreAdapter {
             case Expr.Literal lit -> lit.value();
             case Expr.Column col -> row.getOrDefault(col.name(), null);
             case Expr.Star s -> null;
+            case Expr.Aggregate ignored -> null;
         };
     }
 

@@ -1,13 +1,22 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 grammar SqlPoly;
 
 query
-    : selectStatement       EOF
-    | insertStatement       EOF
-    | insertSelectStatement EOF
-    | updateStatement       EOF
-    | deleteStatement       EOF
-    | createTableStatement  EOF
-    | dropTableStatement    EOF
+    : selectStatement ((K_UNION K_ALL? | K_EXCEPT) selectStatement)? SEMICOLON? EOF
+    | insertStatement       SEMICOLON? EOF
+    | insertSelectStatement SEMICOLON? EOF
+    | updateStatement       SEMICOLON? EOF
+    | deleteStatement       SEMICOLON? EOF
+    | createTableStatement  SEMICOLON? EOF
+    | dropTableStatement    SEMICOLON? EOF
+    | createIndexStatement  SEMICOLON? EOF
+    | alterTableStatement   SEMICOLON? EOF
+    | registerStoreStatement SEMICOLON? EOF
     ;
 
 // ─── SELECT ──────────────────────────────────────────────────────────────────
@@ -16,8 +25,11 @@ selectStatement
     : K_SELECT selectList
       K_FROM tableRef
       joinClause*
-      (K_WHERE condition)?
-      SEMICOLON?
+      (K_WHERE whereClause=condition)?
+      (K_GROUP K_BY groupByList)?
+      (K_HAVING havingClause=condition)?
+      (K_ORDER K_BY orderByList)?
+      (K_LIMIT limit=NUMBER (K_OFFSET offset=NUMBER)?)?
     ;
 
 selectList : STAR | selectItem (COMMA selectItem)* ;
@@ -49,13 +61,20 @@ condition
 compOp : EQ | NEQ | GT | LT | GTE | LTE ;
 
 expr
-    : qualifier=IDENTIFIER DOT col=IDENTIFIER              # QualifiedColumn
+    : func=IDENTIFIER LPAREN STAR RPAREN                   # AggregateStar
+    | func=IDENTIFIER LPAREN arg=expr RPAREN               # AggregateExpr
+    | qualifier=IDENTIFIER DOT col=IDENTIFIER              # QualifiedColumn
     | qualifier=IDENTIFIER DOT STAR                        # QualifiedStar
     | name=IDENTIFIER                                      # SimpleColumn
     | val=literal                                          # LiteralVal
     ;
 
 literal : STRING_LITERAL | NUMBER | K_TRUE | K_FALSE | K_NULL ;
+
+groupByList : expr (COMMA expr)* ;
+
+orderByList : orderByItem (COMMA orderByItem)* ;
+orderByItem : expr (K_ASC | K_DESC)? ;
 
 // ─── INSERT (values) ─────────────────────────────────────────────────────────
 
@@ -114,6 +133,30 @@ dropTableStatement
     : K_DROP K_POLYSTORE K_TABLE tableName
     ;
 
+// ─── CREATE INDEX ────────────────────────────────────────────────────────────
+
+createIndexStatement
+    : K_CREATE K_INDEX name=IDENTIFIER K_ON store=IDENTIFIER DOT table=IDENTIFIER
+      LPAREN columnName (COMMA columnName)* RPAREN
+    ;
+
+// ─── ALTER TABLE ─────────────────────────────────────────────────────────────
+
+alterTableStatement
+    : K_ALTER K_POLYSTORE K_TABLE tableName K_ADD K_COLUMN columnDef            # AlterAddColumn
+    | K_ALTER K_POLYSTORE K_TABLE tableName K_DROP K_COLUMN col=IDENTIFIER
+      K_FROM K_STORE storeName                                                   # AlterDropColumn
+    ;
+
+// ─── REGISTER STORE ──────────────────────────────────────────────────────────
+// Syntax: REGISTER STORE name storeType 'host' port 'database' ['user' 'pass']
+
+registerStoreStatement
+    : K_REGISTER K_STORE name=IDENTIFIER storeType=IDENTIFIER
+      host=STRING_LITERAL port=NUMBER db=STRING_LITERAL
+      (user=STRING_LITERAL pass=STRING_LITERAL)?
+    ;
+
 tableName  : IDENTIFIER ;
 storeName  : IDENTIFIER ;
 columnName : IDENTIFIER ;
@@ -149,6 +192,22 @@ K_IN        : I N ;
 K_IS        : I S ;
 K_LIKE      : L I K E ;
 K_BETWEEN   : B E T W E E N ;
+K_GROUP     : G R O U P ;
+K_BY        : B Y ;
+K_HAVING    : H A V I N G ;
+K_ORDER     : O R D E R ;
+K_ASC       : A S C ;
+K_DESC      : D E S C ;
+K_LIMIT     : L I M I T ;
+K_OFFSET    : O F F S E T ;
+K_UNION     : U N I O N ;
+K_EXCEPT    : E X C E P T ;
+K_ALL       : A L L ;
+K_INDEX     : I N D E X ;
+K_ALTER     : A L T E R ;
+K_ADD       : A D D ;
+K_COLUMN    : C O L U M N ;
+K_REGISTER  : R E G I S T E R ;
 
 EQ        : '=' ;
 NEQ       : '!=' | '<>' ;

@@ -1,8 +1,19 @@
+<!--
+  Copyright (c) 2026 Jóvio Luiz Giacomolli
+  Licensed under the PolyForm Noncommercial License 1.0.0
+  https://polyformproject.org/licenses/noncommercial/1.0.0
+-->
+
 <nav class="navbar">
   <div class="nav-brand">
     <span class="brand-poly">Poly</span><span class="brand-secure">Secure</span>
   </div>
   <div class="nav-right">
+    <button
+      class="btn-ghost"
+      [class.active]="monitoringActive()"
+      (click)="monitoringToggled.emit()"
+    >{{ monitoringActive() ? '✕ Monitoramento' : '▤ Monitoramento' }}</button>
     <button class="btn-help" (click)="helpRequested.emit()" title="Como usar">?</button>
     <span class="nav-user">{{ auth.username() }}</span>
     <button class="btn-ghost" (click)="logout()">Sair</button>

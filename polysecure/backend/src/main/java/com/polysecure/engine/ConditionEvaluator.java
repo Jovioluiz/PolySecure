@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.engine;
 
 import com.polysecure.model.Condition;
@@ -46,7 +52,20 @@ class ConditionEvaluator {
                 yield null;
             }
             case Expr.Star s -> null;
+            // Aggregates in HAVING are stored by their expression string (e.g. "COUNT(*)")
+            case Expr.Aggregate agg -> row.getOrDefault(aggToKey(agg), null);
         };
+    }
+
+    static String aggToKey(Expr.Aggregate agg) {
+        String argStr = switch (agg.arg()) {
+            case Expr.Star ignored -> "*";
+            case Expr.Column col -> col.tableAlias() != null
+                ? col.tableAlias() + "." + col.name() : col.name();
+            case Expr.Literal lit -> String.valueOf(lit.value());
+            case Expr.Aggregate nested -> aggToKey(nested);
+        };
+        return agg.func().toUpperCase() + "(" + argStr + ")";
     }
 
     // Converts SQL LIKE pattern (% = any, _ = one char) to Java regex match

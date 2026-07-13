@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.catalog;
 
 import com.polysecure.model.ColumnDefinition;
@@ -57,6 +63,24 @@ public class MetadataCatalog {
 
     public Set<String> listTables() {
         return Collections.unmodifiableSet(tables.keySet());
+    }
+
+    public void addColumn(String tableName, ColumnDefinition column) {
+        tables.compute(tableName, (k, cols) -> {
+            if (cols == null) throw new IllegalArgumentException("Table not found: " + tableName);
+            List<ColumnDefinition> updated = new ArrayList<>(cols);
+            updated.add(column);
+            return List.copyOf(updated);
+        });
+    }
+
+    public void removeColumn(String tableName, String columnName, String storeName) {
+        tables.compute(tableName, (k, cols) -> {
+            if (cols == null) throw new IllegalArgumentException("Table not found: " + tableName);
+            return cols.stream()
+                .filter(c -> !(c.name().equals(columnName) && c.store().equals(storeName)))
+                .collect(Collectors.toUnmodifiableList());
+        });
     }
 
     // Returns a snapshot of the catalog for persistence

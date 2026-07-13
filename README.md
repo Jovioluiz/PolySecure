@@ -212,5 +212,6 @@ Todas as decisões de design, validação de resultados e direcionamento do proj
 
 ## Licença
 
-Este projeto é de uso acadêmico e de pesquisa. Para outros usos, entre em contato com o autor.
+Este projeto é licenciado sob a **PolyForm Noncommercial License 1.0.0** — uso livre para fins acadêmicos, de pesquisa, pessoais e por organizações sem fins lucrativos (educacionais, de pesquisa pública, governamentais, etc.). Uso comercial requer licenciamento à parte. Texto completo em [`LICENSE`](LICENSE) ou em [polyformproject.org](https://polyformproject.org/licenses/noncommercial/1.0.0).
+
 **Autor:** Jóvio Luiz Giacomolli — [jovioluizg@gmail.com](mailto:jovioluizg@gmail.com)

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.jdbc;
 
 import com.polysecure.adapter.StoreCapabilities;
@@ -70,6 +76,9 @@ public class OracleAdapter extends JdbcStoreAdapter {
 
     @Override
     public StoreCapabilities getCapabilities() { return StoreCapabilities.full(); }
+
+    @Override
+    protected String pingQuery() { return "SELECT 1 FROM DUAL"; }
 
     @Override
     protected String toSqlType(String type) {

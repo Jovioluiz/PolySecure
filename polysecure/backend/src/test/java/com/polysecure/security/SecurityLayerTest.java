@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.security;
 
 import com.polysecure.api.dto.LoginRequest;
@@ -33,7 +39,8 @@ class SecurityLayerTest {
     private static final SelectStatement SELECT_PG = new SelectStatement(
         true, List.of(),
         new TableRef("pg", "users", null),
-        List.of(), null
+        List.of(), null,
+        List.of(), null, List.of(), null, null
     );
 
     private static final InsertStatement INSERT_PG = new InsertStatement(

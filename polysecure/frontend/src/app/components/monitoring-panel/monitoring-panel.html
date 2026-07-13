@@ -1,0 +1,125 @@
+<!--
+  Copyright (c) 2026 Jóvio Luiz Giacomolli
+  Licensed under the PolyForm Noncommercial License 1.0.0
+  https://polyformproject.org/licenses/noncommercial/1.0.0
+-->
+
+<div class="monitoring-panel">
+  <div class="monitoring-header">
+    <span>Monitoramento</span>
+    <div class="header-actions">
+      @if (admin.loading()) {
+        <span class="hint">Atualizando…</span>
+      }
+      <button class="btn-refresh" (click)="admin.refresh()">↻ Atualizar</button>
+    </div>
+  </div>
+
+  <div class="monitoring-body">
+    @if (admin.error()) {
+      <div class="error-box">{{ admin.error() }}</div>
+    }
+
+    <div class="grid">
+
+      <!-- Store health -->
+      <section class="card">
+        <h3>Saúde das Stores</h3>
+        @if (admin.health().length === 0) {
+          <div class="empty">Nenhuma store registrada</div>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>Tipo</th><th>Status</th><th>Latência</th></tr>
+            </thead>
+            <tbody>
+              @for (h of admin.health(); track h.name) {
+                <tr>
+                  <td>{{ h.name }}</td>
+                  <td class="muted">{{ h.type }}</td>
+                  <td><span class="status-badge" [class.up]="h.status === 'UP'" [class.down]="h.status === 'DOWN'">{{ h.status }}</span></td>
+                  <td class="muted">{{ h.latencyMs }}ms</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <!-- Cost model -->
+      <section class="card">
+        <h3>Modelo de Custo</h3>
+        @if (admin.stats(); as s) {
+          <p class="hint">{{ s.costModel.description }}</p>
+          <p class="hint">Amostras: {{ s.costModel.sampleCount }}</p>
+          <table>
+            <thead><tr><th>Feature</th><th>Peso</th></tr></thead>
+            <tbody>
+              @for (w of weightRows(); track w.name) {
+                <tr><td>{{ w.name }}</td><td class="muted">{{ w.value.toFixed(4) }}</td></tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty">Sem dados</div>
+        }
+      </section>
+
+      <!-- Materialized views / cache -->
+      <section class="card card-wide">
+        <h3>Views Materializadas (Cache)</h3>
+        @if (admin.views().length === 0) {
+          <div class="empty">Nenhuma view em cache</div>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Query</th><th>Stores</th><th>Linhas</th><th>Hits</th></tr>
+            </thead>
+            <tbody>
+              @for (v of admin.views(); track v.query) {
+                <tr>
+                  <td class="mono">{{ truncate(v.query) }}</td>
+                  <td class="muted">{{ v.stores.join(', ') }}</td>
+                  <td class="muted">{{ v.rowCount }}</td>
+                  <td class="muted">{{ v.hits }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <!-- Recent audit log -->
+      <section class="card card-wide">
+        <h3>Auditoria Recente</h3>
+        @if (admin.audit().length === 0) {
+          <div class="empty">Nenhum registro de auditoria</div>
+        } @else {
+          <table>
+            <thead>
+              <tr><th>Hora</th><th>Usuário</th><th>Query</th><th>Stores</th><th>Linhas</th><th>Duração</th></tr>
+            </thead>
+            <tbody>
+              @for (a of admin.audit(); track a.timestamp + a.username + a.query) {
+                <tr>
+                  <td class="muted">{{ formatTime(a.timestamp) }}</td>
+                  <td>{{ a.username }}</td>
+                  <td class="mono">{{ truncate(a.query, 50) }}</td>
+                  <td class="muted">{{ a.storesAccessed.join(', ') }}</td>
+                  <td class="muted">{{ a.rowsReturned }}</td>
+                  <td class="muted">{{ a.durationMs }}ms</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+    </div>
+
+    <p class="footer-hint">
+      Métricas Prometheus em <code>/actuator/prometheus</code> · Saúde detalhada em <code>/actuator/health</code> ·
+      Traces distribuídos visualizáveis no Zipkin (<code>http://localhost:9411</code>, se em execução).
+    </p>
+  </div>
+</div>

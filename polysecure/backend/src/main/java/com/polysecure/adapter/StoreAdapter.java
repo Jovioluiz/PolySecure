@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter;
 
 import com.polysecure.model.ColumnDefinition;
@@ -31,6 +37,21 @@ public interface StoreAdapter {
 
     // Capability declaration — what operations this store supports
     StoreCapabilities getCapabilities();
+
+    // Phase 5 — Index management (no-op by default)
+    default void createIndex(String table, String indexName, List<String> columns) {}
+
+    // Phase 5 — Schema evolution
+    default void addColumn(String table, ColumnDefinition column) {
+        throw new UnsupportedOperationException("addColumn not supported by " + getClass().getSimpleName());
+    }
+
+    default void dropColumn(String table, String columnName) {
+        throw new UnsupportedOperationException("dropColumn not supported by " + getClass().getSimpleName());
+    }
+
+    // Phase 6 — Observability: lightweight connectivity check for health monitoring
+    default boolean ping() { return true; }
 
     void close();
 }

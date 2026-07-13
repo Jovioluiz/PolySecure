@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.security.rbac;
 
 import com.polysecure.catalog.MetadataCatalog;
@@ -31,6 +37,19 @@ public class PermissionEvaluator {
             case DeleteStatement      d  -> checkStores(role, Permission.DELETE, catalogStores(d.tableName()));
             case CreateTableStatement c  -> checkStores(role, Permission.DDL,    createStores(c));
             case DropTableStatement   dr -> checkStores(role, Permission.DDL,    catalogStores(dr.tableName()));
+            case UnionStatement       u  -> {
+                checkStores(role, Permission.SELECT, selectStores(u.left()));
+                checkStores(role, Permission.SELECT, selectStores(u.right()));
+            }
+            case ExceptStatement      e  -> {
+                checkStores(role, Permission.SELECT, selectStores(e.left()));
+                checkStores(role, Permission.SELECT, selectStores(e.right()));
+            }
+            case RegisterStoreStatement ignored -> checkStores(role, Permission.DDL, List.of());
+            case CreateIndexStatement   ci      -> checkStores(role, Permission.DDL, List.of(ci.storeName()));
+            case AlterTableStatement    at      -> checkStores(role, Permission.DDL,
+                at.operation() == AlterTableStatement.AlterOp.ADD_COLUMN
+                    ? List.of(at.addColumn().store()) : List.of(at.dropStoreName()));
         }
     }
 
@@ -46,6 +65,17 @@ public class PermissionEvaluator {
             case DeleteStatement      d  -> catalogStores(d.tableName());
             case CreateTableStatement c  -> createStores(c);
             case DropTableStatement   dr -> catalogStores(dr.tableName());
+            case UnionStatement       u  -> Stream.concat(
+                selectStores(u.left()).stream(), selectStores(u.right()).stream()
+            ).distinct().collect(Collectors.toList());
+            case ExceptStatement      e  -> Stream.concat(
+                selectStores(e.left()).stream(), selectStores(e.right()).stream()
+            ).distinct().collect(Collectors.toList());
+            case RegisterStoreStatement ignored -> List.of();
+            case CreateIndexStatement   ci      -> List.of(ci.storeName());
+            case AlterTableStatement    at      ->
+                at.operation() == AlterTableStatement.AlterOp.ADD_COLUMN
+                    ? List.of(at.addColumn().store()) : List.of(at.dropStoreName());
         };
     }
 

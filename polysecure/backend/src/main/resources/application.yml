@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Jóvio Luiz Giacomolli
+# Licensed under the PolyForm Noncommercial License 1.0.0
+# https://polyformproject.org/licenses/noncommercial/1.0.0
+
 spring:
   application:
     name: polysecure
@@ -8,3 +12,31 @@ server:
 logging:
   level:
     com.polysecure: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics,info
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles:
+        polysecure.query: 0.5,0.95,0.99
+        polysecure.store: 0.5,0.95,0.99
+      percentiles-histogram:
+        polysecure.query: true
+        polysecure.store: true
+  # Tracing is off by default so span-export doesn't spam the log with connection-refused
+  # errors when Zipkin isn't running. Start `docker-compose up -d zipkin` and override
+  # this to 1.0 (e.g. -Dmanagement.tracing.sampling.probability=1.0) to capture traces.
+  tracing:
+    sampling:
+      probability: 0.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans

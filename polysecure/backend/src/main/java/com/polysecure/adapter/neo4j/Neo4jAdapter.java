@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.neo4j;
 
 import com.polysecure.adapter.StoreAdapter;
@@ -122,6 +128,12 @@ public class Neo4jAdapter implements StoreAdapter {
     }
 
     @Override
+    public boolean ping() {
+        try { driver.verifyConnectivity(); return true; }
+        catch (Exception e) { return false; }
+    }
+
+    @Override
     public void close() { driver.close(); }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -225,6 +237,7 @@ public class Neo4jAdapter implements StoreAdapter {
                     yield "$" + name;
                 }
                 case Expr.Star s -> "*";
+                case Expr.Aggregate ignored -> "null";
             };
         }
     }

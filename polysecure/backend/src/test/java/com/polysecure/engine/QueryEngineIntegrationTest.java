@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.engine;
 
 import com.polysecure.adapter.AdapterFactory;
@@ -8,6 +14,8 @@ import com.polysecure.catalog.StoreConfig;
 import com.polysecure.catalog.StoreConfig.StoreType;
 import com.polysecure.catalog.StoreRegistry;
 import com.polysecure.parser.SqlPolyFacade;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,7 +69,9 @@ class QueryEngineIntegrationTest {
 
         AdapterFactory factory = new AdapterFactory();
         MetadataCatalog catalog = new MetadataCatalog();
-        registry = new StoreRegistry(factory);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ObservationRegistry observationRegistry = ObservationRegistry.create();
+        registry = new StoreRegistry(factory, meterRegistry, observationRegistry);
 
         String[] pgParts = postgres.getJdbcUrl().replace("jdbc:postgresql://", "").split("/");
         String[] hostPort = pgParts[0].split(":");
@@ -77,11 +87,12 @@ class QueryEngineIntegrationTest {
             System.getProperty("java.io.tmpdir") + "/polysecure-test");
         DdlExecutor ddl = new DdlExecutor(catalog, registry, tx, persistence);
         DmlExecutor dml = new DmlExecutor(catalog, registry, tx);
-        viewCache = new MaterializedViewCache();
+        viewCache = new MaterializedViewCache(meterRegistry);
         StatsRegistry stats = new StatsRegistry(registry);
         CostEstimator cost = new CostEstimator(stats, costModel);
         SemanticValidator validator = new SemanticValidator(registry, catalog);
-        engine = new QueryEngine(new SqlPolyFacade(), registry, ddl, dml, viewCache, cost, validator);
+        engine = new QueryEngine(new SqlPolyFacade(), registry, ddl, dml, viewCache, cost, validator, persistence,
+            observationRegistry);
     }
 
     @BeforeEach

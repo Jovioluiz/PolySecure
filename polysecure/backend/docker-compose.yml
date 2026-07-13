@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Jóvio Luiz Giacomolli
+# Licensed under the PolyForm Noncommercial License 1.0.0
+# https://polyformproject.org/licenses/noncommercial/1.0.0
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -39,8 +43,24 @@ services:
       - solr-precreate
       - produtos
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    ports:
+      - "9411:9411"   # UI + collector — matches management.zipkin.tracing.endpoint
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "PolySecure123!"   # register the store with username: sa
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
 volumes:
   postgres_data:
   mongo_data:
   neo4j_data:
   solr_data:
+  sqlserver_data:

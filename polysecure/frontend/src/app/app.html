@@ -1,3 +1,9 @@
+<!--
+  Copyright (c) 2026 Jóvio Luiz Giacomolli
+  Licensed under the PolyForm Noncommercial License 1.0.0
+  https://polyformproject.org/licenses/noncommercial/1.0.0
+-->
+
 @if (!auth.isLoggedIn()) {
   <app-login (loggedIn)="onLoggedIn()" />
 } @else {
@@ -5,23 +11,45 @@
     <app-navbar
       (loggedOut)="queryResult.set(null); translationSql.set(null)"
       (helpRequested)="showHelp.set(true)"
+      [monitoringActive]="showMonitoring()"
+      (monitoringToggled)="toggleMonitoring()"
     />
 
     <div class="workspace-body">
       <app-sidebar (tableSelected)="onTableSelected($event)" />
 
       <main class="main-content">
-        <app-editor-panel
-          (result)="onResult($event)"
-          (translationReady)="onTranslation($event)"
-        />
+        @if (showMonitoring()) {
+          <app-monitoring-panel />
+        } @else {
+          <div class="tab-bar">
+            @for (tab of tabs(); track tab.id) {
+              <button
+                class="tab"
+                [class.active]="tab.id === activeTabId()"
+                (click)="switchTab(tab.id)"
+              >
+                {{ tab.label }}
+                @if (tabs().length > 1) {
+                  <span class="tab-close" (click)="closeTab(tab.id, $event)">×</span>
+                }
+              </button>
+            }
+            <button class="tab-add" (click)="addTab()" title="Nova aba">+</button>
+          </div>
 
-        <app-translation-panel
-          [sql]="translationSql()"
-          (closed)="translationSql.set(null)"
-        />
+          <app-editor-panel
+            (result)="onResult($event)"
+            (translationReady)="onTranslation($event)"
+          />
 
-        <app-results-panel [result]="queryResult()" />
+          <app-translation-panel
+            [sql]="translationSql()"
+            (closed)="translationSql.set(null)"
+          />
+
+          <app-results-panel [result]="queryResult()" />
+        }
       </main>
     </div>
   </div>

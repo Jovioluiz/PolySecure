@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jóvio Luiz Giacomolli
+ * Licensed under the PolyForm Noncommercial License 1.0.0
+ * https://polyformproject.org/licenses/noncommercial/1.0.0
+ */
+
 package com.polysecure.adapter.kafka;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -145,6 +151,17 @@ public class KafkaAdapter implements StoreAdapter {
         return new StoreCapabilities(true, true, false, false, true, false);
     }
 
+    @Override
+    public boolean ping() {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, 3000);
+        try (AdminClient admin = AdminClient.create(props)) {
+            admin.describeCluster().nodes().get(3, java.util.concurrent.TimeUnit.SECONDS);
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
     @Override public void close() {}
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -197,6 +214,7 @@ public class KafkaAdapter implements StoreAdapter {
             case Expr.Literal lit -> lit.value();
             case Expr.Column col -> row.getOrDefault(col.name(), null);
             case Expr.Star s -> null;
+            case Expr.Aggregate ignored -> null;
         };
     }
 
