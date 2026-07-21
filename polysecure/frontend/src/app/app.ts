@@ -25,6 +25,15 @@ interface QueryTab {
   translationSql: string | null;
 }
 
+const TABS_STORAGE_KEY = 'polysecure.editor.tabs';
+const DEFAULT_QUERY = '-- Exemplo: buscar dados de tabela cross-store\nSELECT *\nFROM orders\nWHERE id = 1';
+
+interface StoredTabs {
+  tabs: { id: number; label: string; sql: string }[];
+  activeTabId: number;
+  nextTabId: number;
+}
+
 @Component({
   selector: 'app-root',
   imports: [Login, Navbar, Sidebar, EditorPanel, TranslationPanel, ResultsPanel, HelpModal, MonitoringPanel],
@@ -43,13 +52,42 @@ export class App {
   protected tabs = signal<QueryTab[]>([{ id: 1, label: 'Query 1', sql: '', result: null, translationSql: null }]);
   protected activeTabId = signal(1);
   private nextTabId = 1;
+  protected initialSql = DEFAULT_QUERY;
 
   @ViewChild(EditorPanel) private editorPanel?: EditorPanel;
+
+  private persistTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     if (this.auth.isLoggedIn()) {
       this.catalog.load();
     }
+    this.restoreTabs();
+  }
+
+  private restoreTabs() {
+    const raw = localStorage.getItem(TABS_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const stored: StoredTabs = JSON.parse(raw);
+      if (!stored.tabs?.length) return;
+      this.tabs.set(stored.tabs.map(t => ({ ...t, result: null, translationSql: null })));
+      this.activeTabId.set(stored.activeTabId);
+      this.nextTabId = stored.nextTabId;
+      const active = stored.tabs.find(t => t.id === stored.activeTabId) ?? stored.tabs[0];
+      this.initialSql = active.sql;
+    } catch {
+      // stored value is corrupted/from an incompatible version — ignore and keep defaults
+    }
+  }
+
+  private persistTabs() {
+    const stored: StoredTabs = {
+      tabs: this.tabs().map(t => ({ id: t.id, label: t.label, sql: t.sql })),
+      activeTabId: this.activeTabId(),
+      nextTabId: this.nextTabId,
+    };
+    localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(stored));
   }
 
   protected onLoggedIn() {
@@ -64,6 +102,7 @@ export class App {
     this.queryResult.set(null);
     this.translationSql.set(null);
     this.editorPanel?.setQuery('');
+    this.persistTabs();
   }
 
   protected switchTab(id: number) {
@@ -74,6 +113,7 @@ export class App {
     this.queryResult.set(tab.result);
     this.translationSql.set(tab.translationSql);
     this.editorPanel?.setQuery(tab.sql);
+    this.persistTabs();
   }
 
   protected closeTab(id: number, event: Event) {
@@ -86,6 +126,7 @@ export class App {
       const next = this.tabs()[Math.max(0, idx - 1)];
       this.switchTab(next.id);
     }
+    this.persistTabs();
   }
 
   private saveCurrent() {
@@ -94,6 +135,13 @@ export class App {
     this.tabs.update(ts => ts.map(t =>
       t.id === id ? { ...t, sql, result: this.queryResult(), translationSql: this.translationSql() } : t
     ));
+  }
+
+  protected onQueryChange(sqlText: string) {
+    const id = this.activeTabId();
+    this.tabs.update(ts => ts.map(t => t.id === id ? { ...t, sql: sqlText } : t));
+    clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => this.persistTabs(), 500);
   }
 
   protected onTableSelected(sql: string) {

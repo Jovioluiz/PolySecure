@@ -65,3 +65,25 @@ export class CatalogService {
       .pipe(tap(() => this.load()));
   }
 }
+
+/**
+ * Endpoints here use `responseType: 'text'` (success bodies are plain strings),
+ * so Angular never parses an error body as JSON even though the backend's
+ * GlobalExceptionHandler always returns a JSON ErrorResponse — `err.error` on
+ * failure is the raw JSON text, not an object. Without this, `err.error.message`
+ * is always undefined and callers fall back to Angular's generic
+ * "Http failure response ... 500 OK" instead of the real backend error.
+ */
+export function parseErrorMessage(err: any, fallback: string): string {
+  let body = err?.error;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { /* not JSON, use as-is */ }
+  }
+  if (body && typeof body === 'object' && typeof body.message === 'string') {
+    return body.message;
+  }
+  if (typeof body === 'string' && body.trim().length > 0) {
+    return body;
+  }
+  return err?.message ?? fallback;
+}

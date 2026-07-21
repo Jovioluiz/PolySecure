@@ -49,6 +49,15 @@ class ConditionEvaluator {
                 for (Map.Entry<String, Object> entry : row.entrySet()) {
                     if (entry.getKey().endsWith(suffix)) yield entry.getValue();
                 }
+                // Case-insensitive fallback: some stores (e.g. SQL Server) report column names
+                // in a different case than the query text used to reference them.
+                for (Map.Entry<String, Object> entry : row.entrySet()) {
+                    String k = entry.getKey();
+                    if (k.equalsIgnoreCase(col.name())
+                        || k.regionMatches(true, k.length() - suffix.length(), suffix, 0, suffix.length())) {
+                        yield entry.getValue();
+                    }
+                }
                 yield null;
             }
             case Expr.Star s -> null;

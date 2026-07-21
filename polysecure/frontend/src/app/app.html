@@ -39,8 +39,10 @@
           </div>
 
           <app-editor-panel
+            [defaultQuery]="initialSql"
             (result)="onResult($event)"
             (translationReady)="onTranslation($event)"
+            (queryChange)="onQueryChange($event)"
           />
 
           <app-translation-panel

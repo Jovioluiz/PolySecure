@@ -161,10 +161,11 @@ public class QueryEngine {
         // When GROUP BY is present, fetch all columns so aggregation works correctly
         boolean fetchStar = stmt.star() || !stmt.groupBy().isEmpty();
 
-        // Columns referenced only in JOIN ON clauses (e.g. the join key) must still be
-        // fetched from each store even when the SELECT list doesn't project them —
-        // otherwise bind-join key extraction and the final hash-join silently match nothing.
-        Map<String, Set<String>> joinCols = collectJoinColumns(stmt);
+        // Columns referenced only in JOIN ON clauses, GROUP BY, or inside an aggregate's
+        // argument (e.g. the "total" in SUM(total)) must still be fetched from each store
+        // even when the SELECT list doesn't project them directly — otherwise bind-join key
+        // extraction, grouping, and aggregation silently match/compute against nothing.
+        Map<String, Set<String>> joinCols = collectRequiredColumns(stmt);
 
         List<Map<String, Object>> result = executeTable(stmt.from(), fetchStar, stmt.projections(), stmt.where(), null, joinCols);
 
@@ -202,8 +203,11 @@ public class QueryEngine {
                 .collect(Collectors.toList());
         }
 
-        // GROUP BY + aggregation + HAVING → replaces normal projection
-        if (!stmt.groupBy().isEmpty()) {
+        // GROUP BY + aggregation + HAVING → replaces normal projection.
+        // Also triggered by a bare aggregate with no GROUP BY (e.g. SELECT COUNT(*) FROM t),
+        // which standard SQL treats as a single implicit group over the whole result set.
+        boolean hasAggregates = stmt.projections().stream().anyMatch(ColumnRef::isAggregate);
+        if (!stmt.groupBy().isEmpty() || hasAggregates) {
             result = applyGroupBy(result, stmt.groupBy(), stmt.projections(), stmt.having());
             result = applyOrderBy(result, stmt.orderBy());
             return applyLimit(result, stmt.limit(), stmt.offset());
@@ -226,11 +230,18 @@ public class QueryEngine {
             Condition having) {
 
         Map<List<Object>, List<Map<String, Object>>> groups = new LinkedHashMap<>();
-        for (Map<String, Object> row : rows) {
-            List<Object> key = groupByExprs.stream()
-                .map(e -> resolveExpr(e, row))
-                .collect(Collectors.toList());
-            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        if (groupByExprs.isEmpty()) {
+            // Bare aggregate with no GROUP BY: the whole result set is a single implicit
+            // group (standard SQL semantics — e.g. SELECT COUNT(*) FROM t always returns
+            // exactly one row, even when t is empty).
+            groups.put(List.of(), rows);
+        } else {
+            for (Map<String, Object> row : rows) {
+                List<Object> key = groupByExprs.stream()
+                    .map(e -> resolveExpr(e, row))
+                    .collect(Collectors.toList());
+                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+            }
         }
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -247,7 +258,8 @@ public class QueryEngine {
                         outputRow.put(aggKey, value);
                     }
                 } else {
-                    Object val = resolveExpr(new Expr.Column(proj.tableAlias(), proj.column()), groupRows.get(0));
+                    Object val = groupRows.isEmpty() ? null
+                        : resolveExpr(new Expr.Column(proj.tableAlias(), proj.column()), groupRows.get(0));
                     outputRow.put(proj.effectiveOutputName(), val);
                 }
             }
@@ -259,17 +271,34 @@ public class QueryEngine {
                 .filter(row -> evaluator.evaluate(having, row))
                 .collect(Collectors.toList());
         }
-        return result;
+
+        // Strip the internal expression-key duplicates added above (e.g. "AVG(estoque)"
+        // alongside the user's "media" alias) — they only exist so HAVING can reference the
+        // raw aggregate expression; the client should only ever see the projected names.
+        Set<String> visibleNames = projections.stream()
+            .map(ColumnRef::effectiveOutputName)
+            .collect(Collectors.toSet());
+        return result.stream()
+            .map(row -> {
+                Map<String, Object> clean = new LinkedHashMap<>();
+                row.forEach((k, v) -> { if (visibleNames.contains(k)) clean.put(k, v); });
+                return clean;
+            })
+            .collect(Collectors.toList());
     }
 
     private Object computeAggregate(Expr.Aggregate agg, List<Map<String, Object>> groupRows) {
         return switch (agg.func().toUpperCase()) {
             case "COUNT" -> (long) groupRows.size();
             case "SUM" -> groupRows.stream()
-                .mapToDouble(r -> toDouble(resolveExpr(agg.arg(), r)))
+                .map(r -> resolveExpr(agg.arg(), r))
+                .filter(Objects::nonNull)
+                .mapToDouble(this::toDouble)
                 .sum();
             case "AVG" -> groupRows.stream()
-                .mapToDouble(r -> toDouble(resolveExpr(agg.arg(), r)))
+                .map(r -> resolveExpr(agg.arg(), r))
+                .filter(Objects::nonNull)
+                .mapToDouble(this::toDouble)
                 .average().orElse(0.0);
             case "MIN" -> groupRows.stream()
                 .map(r -> resolveExpr(agg.arg(), r))
@@ -346,6 +375,16 @@ public class QueryEngine {
                 String suffix = "." + col.name();
                 for (Map.Entry<String, Object> entry : row.entrySet()) {
                     if (entry.getKey().endsWith(suffix)) yield entry.getValue();
+                }
+                // Case-insensitive fallback: some stores (e.g. SQL Server) report column names
+                // in a different case than the query text — the store itself resolves
+                // identifiers case-insensitively, but the exact-case matches above won't.
+                for (Map.Entry<String, Object> entry : row.entrySet()) {
+                    String k = entry.getKey();
+                    if (k.equalsIgnoreCase(col.name())
+                        || k.regionMatches(true, k.length() - suffix.length(), suffix, 0, suffix.length())) {
+                        yield entry.getValue();
+                    }
                 }
                 yield null;
             }
@@ -497,6 +536,41 @@ public class QueryEngine {
         return result;
     }
 
+    // Extends collectJoinColumns() with columns needed for correct aggregation/grouping
+    // that may not appear as plain projections: the column inside an aggregate's argument
+    // (e.g. "total" in SUM(total)) and any GROUP BY key column.
+    private Map<String, Set<String>> collectRequiredColumns(SelectStatement stmt) {
+        Map<String, Set<String>> result = collectJoinColumns(stmt);
+        List<String> allAliases = new ArrayList<>();
+        allAliases.add(stmt.from().effectiveAlias());
+        for (JoinClause j : stmt.joins()) allAliases.add(j.table().effectiveAlias());
+
+        for (ColumnRef proj : stmt.projections()) {
+            if (proj.isAggregate() && proj.aggExpr() instanceof Expr.Aggregate agg) {
+                addRequiredColumn(agg.arg(), allAliases, result);
+            }
+        }
+        for (Expr e : stmt.groupBy()) {
+            addRequiredColumn(e, allAliases, result);
+        }
+        return result;
+    }
+
+    // Qualified columns (alias.col) are attributed to that alias only. Unqualified columns
+    // are requested from every table in the query since we can't tell which one owns them —
+    // harmless in the common single-table case, and mirrors how buildLocalCols() already
+    // treats unqualified plain projections.
+    private void addRequiredColumn(Expr e, List<String> allAliases, Map<String, Set<String>> out) {
+        if (!(e instanceof Expr.Column col)) return;
+        if (col.tableAlias() != null) {
+            out.computeIfAbsent(col.tableAlias(), k -> new HashSet<>()).add(col.name());
+        } else {
+            for (String alias : allAliases) {
+                out.computeIfAbsent(alias, k -> new HashSet<>()).add(col.name());
+            }
+        }
+    }
+
     private void collectColumnsFromCondition(Condition cond, Map<String, Set<String>> out) {
         switch (cond) {
             case Condition.And a -> {
@@ -610,6 +684,12 @@ public class QueryEngine {
             int dot = k.indexOf('.');
             if (dot >= 0 && k.substring(dot + 1).equals(column)) return k;
             if (k.equals(column)) return k;
+        }
+        // Case-insensitive fallback — see resolveExpr() for why this is needed.
+        for (String k : row.keySet()) {
+            int dot = k.indexOf('.');
+            if (dot >= 0 && k.substring(dot + 1).equalsIgnoreCase(column)) return k;
+            if (k.equalsIgnoreCase(column)) return k;
         }
         return null;
     }

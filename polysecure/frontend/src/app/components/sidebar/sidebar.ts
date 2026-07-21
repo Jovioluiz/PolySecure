@@ -7,7 +7,7 @@
 import { Component, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { KeyValuePipe } from '@angular/common';
-import { CatalogService, StorePayload } from '../../services/catalog.service';
+import { CatalogService, StorePayload, parseErrorMessage } from '../../services/catalog.service';
 
 const DEFAULT_PORTS: Record<string, number> = {
   POSTGRES: 5432, MONGODB: 27017, NEO4J: 7687,
@@ -56,8 +56,7 @@ export class Sidebar {
       },
       error: err => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? err?.message ?? 'Erro ao registrar store.';
-        this.formError.set(msg);
+        this.formError.set(parseErrorMessage(err, 'Erro ao registrar store.'));
       },
     });
   }
@@ -66,8 +65,7 @@ export class Sidebar {
     if (!confirm(`Remover a store "${name}"?`)) return;
     this.catalog.removeStore(name).subscribe({
       error: err => {
-        const msg = err?.error?.message ?? 'Erro ao remover store.';
-        alert(msg);
+        alert(parseErrorMessage(err, 'Erro ao remover store.'));
       },
     });
   }

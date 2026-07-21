@@ -82,15 +82,20 @@
   position: relative;
 
   .cm-host {
-    height: 180px;
-    overflow: hidden;
+    height: 340px;
+    min-height: 140px;
+    max-height: 70vh;
+    overflow: auto;
+    resize: vertical;
 
     :host ::ng-deep .cm-editor {
-      height: 180px;
+      height: 100%;
       line-height: 1.6;
 
       &.cm-focused { outline: none; }
     }
+
+    :host ::ng-deep .cm-scroller { overflow: auto; }
   }
 }
 
