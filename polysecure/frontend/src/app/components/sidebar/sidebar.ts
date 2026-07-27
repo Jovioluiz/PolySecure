@@ -12,8 +12,59 @@ import { CatalogService, StorePayload, parseErrorMessage } from '../../services/
 const DEFAULT_PORTS: Record<string, number> = {
   POSTGRES: 5432, MONGODB: 27017, NEO4J: 7687,
   MYSQL: 3306, MARIADB: 3306, SQLSERVER: 1433, ORACLE: 1521,
-  SNOWFLAKE: 443, CLICKHOUSE: 8123,
+  SNOWFLAKE: 443, SQLITE: 0, FIREBIRD: 3050,
+  DATABRICKS: 443, DOLPHINDB: 8848,
   ELASTICSEARCH: 9200, REDIS: 6379, CASSANDRA: 9042, SOLR: 8983, KAFKA: 9092,
+};
+
+const STORE_TYPE_LABELS: Record<string, string> = {
+  POSTGRES: 'PostgreSQL', MYSQL: 'MySQL', MARIADB: 'MariaDB', SQLSERVER: 'SQL Server',
+  ORACLE: 'Oracle', SNOWFLAKE: 'Snowflake', SQLITE: 'SQLite', FIREBIRD: 'Firebird',
+  DATABRICKS: 'Databricks', DOLPHINDB: 'DolphinDB',
+  MONGODB: 'MongoDB', NEO4J: 'Neo4j', REDIS: 'Redis', CASSANDRA: 'Cassandra',
+  ELASTICSEARCH: 'Elasticsearch', SOLR: 'Apache Solr', KAFKA: 'Apache Kafka',
+};
+
+/** Grupos espelham os optgroups do formulário de cadastro. */
+const STORE_TYPE_GROUP: Record<string, 'relational' | 'analytics' | 'nosql' | 'search'> = {
+  POSTGRES: 'relational', MYSQL: 'relational', MARIADB: 'relational', SQLSERVER: 'relational',
+  ORACLE: 'relational', SNOWFLAKE: 'relational', SQLITE: 'relational', FIREBIRD: 'relational',
+  DATABRICKS: 'analytics', DOLPHINDB: 'analytics',
+  MONGODB: 'nosql', NEO4J: 'nosql', REDIS: 'nosql', CASSANDRA: 'nosql',
+  ELASTICSEARCH: 'search', SOLR: 'search', KAFKA: 'search',
+};
+
+const GROUP_COLOR: Record<string, string> = {
+  relational: '#3fb950',
+  analytics: '#d29922',
+  nosql: '#bc8cff',
+  search: '#58a6ff',
+};
+
+/** Stores cloud-only: "host" é um endpoint remoto, nunca localhost. */
+const CLOUD_TYPES = new Set(['DATABRICKS', 'SNOWFLAKE']);
+
+/** Stores embarcados/arquivo: host, porta e usuário não se aplicam. */
+const FILE_BASED_TYPES = new Set(['SQLITE']);
+
+/** Stores cuja autenticação ignora o campo usuário (fixo internamente). */
+const NO_USERNAME_TYPES = new Set(['SQLITE', 'DATABRICKS']);
+
+/** Stores em que a senha/token não é opcional (sem ela o driver falha com erro genérico). */
+const PASSWORD_REQUIRED_TYPES = new Set(['DATABRICKS']);
+
+const HOST_PLACEHOLDERS: Record<string, string> = {
+  DATABRICKS: 'adb-xxxx.azuredatabricks.net',
+  SNOWFLAKE: 'sua-conta.snowflakecomputing.com',
+};
+
+const DATABASE_PLACEHOLDERS: Record<string, string> = {
+  DATABRICKS: 'ID do SQL warehouse',
+  SQLITE: 'caminho do arquivo ou :memory:',
+};
+
+const PASSWORD_PLACEHOLDERS: Record<string, string> = {
+  DATABRICKS: 'personal access token (PAT)',
 };
 
 @Component({
@@ -39,11 +90,42 @@ export class Sidebar {
 
   protected onTypeChange() {
     this.form.port = DEFAULT_PORTS[this.form.type] ?? 5432;
+    if (CLOUD_TYPES.has(this.form.type)) {
+      if (this.form.host === 'localhost') this.form.host = '';
+    } else if (!FILE_BASED_TYPES.has(this.form.type) && this.form.host === '') {
+      this.form.host = 'localhost';
+    }
+    if (NO_USERNAME_TYPES.has(this.form.type)) this.form.username = '';
+  }
+
+  protected isFileBased(): boolean {
+    return FILE_BASED_TYPES.has(this.form.type);
+  }
+
+  protected showUsername(): boolean {
+    return !NO_USERNAME_TYPES.has(this.form.type);
+  }
+
+  protected hostPlaceholder(): string {
+    return HOST_PLACEHOLDERS[this.form.type] ?? 'localhost';
+  }
+
+  protected databasePlaceholder(): string {
+    return DATABASE_PLACEHOLDERS[this.form.type] ?? 'meu_banco';
+  }
+
+  protected passwordPlaceholder(): string {
+    return PASSWORD_PLACEHOLDERS[this.form.type] ?? '(opcional)';
   }
 
   protected submitStore() {
-    if (!this.form.name || !this.form.host || !this.form.database) {
-      this.formError.set('Preencha nome, host e database.');
+    const hostRequired = !this.isFileBased();
+    if (!this.form.name || (hostRequired && !this.form.host) || !this.form.database) {
+      this.formError.set(hostRequired ? 'Preencha nome, host e database.' : 'Preencha nome e database.');
+      return;
+    }
+    if (PASSWORD_REQUIRED_TYPES.has(this.form.type) && !this.form.password) {
+      this.formError.set('Preencha o Personal Access Token (PAT) no campo Senha.');
       return;
     }
     this.saving.set(true);
@@ -74,25 +156,22 @@ export class Sidebar {
     this.tableSelected.emit(`SELECT * FROM ${name} LIMIT 10`);
   }
 
-  protected storeColor(name: string): string {
-    if (name.includes('pg') || name.includes('postgres')) return '#3fb950';
-    if (name.includes('mg') || name.includes('mongo')) return '#bc8cff';
-    if (name.includes('neo')) return '#d29922';
-    return '#58a6ff';
+  protected storeColor(type: string): string {
+    return GROUP_COLOR[STORE_TYPE_GROUP[type]] ?? GROUP_COLOR['search'];
   }
 
-  protected storeBadgeClass(name: string): string {
-    if (name.includes('pg') || name.includes('postgres')) return 'badge-pg';
-    if (name.includes('mg') || name.includes('mongo')) return 'badge-mg';
-    if (name.includes('neo')) return 'badge-neo';
-    return 'badge-def';
+  /** col.store no catálogo de tabelas é o *nome* do store, não o tipo — resolve via catalog.stores(). */
+  protected storeColorByName(name: string): string {
+    const type = this.catalog.stores().find(s => s.name === name)?.type;
+    return type ? this.storeColor(type) : GROUP_COLOR['search'];
   }
 
-  protected storeBadgeLabel(name: string): string {
-    if (name.includes('pg') || name.includes('postgres')) return 'PG';
-    if (name.includes('mg') || name.includes('mongo')) return 'MG';
-    if (name.includes('neo')) return 'NEO4J';
-    return name.toUpperCase();
+  protected storeBadgeClass(type: string): string {
+    return `badge-${STORE_TYPE_GROUP[type] ?? 'search'}`;
+  }
+
+  protected storeTypeLabel(type: string): string {
+    return STORE_TYPE_LABELS[type] ?? type;
   }
 
   private emptyForm(): StorePayload {

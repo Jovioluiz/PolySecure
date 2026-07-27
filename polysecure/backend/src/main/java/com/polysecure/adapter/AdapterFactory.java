@@ -37,7 +37,11 @@ public class AdapterFactory {
             case SQLSERVER      -> new SqlServerAdapter(config);
             case ORACLE         -> new OracleAdapter(config);
             case SNOWFLAKE      -> new SnowflakeAdapter(config);
-            case CLICKHOUSE     -> new ClickHouseAdapter(config);
+            case SQLITE         -> new SqliteAdapter(config);
+            case FIREBIRD       -> new FirebirdAdapter(config);
+            // Analytics / cloud warehouse
+            case DATABRICKS     -> new DatabricksAdapter(config);
+            case DOLPHINDB      -> new DolphinDbAdapter(config);
             // NoSQL / Search / Streaming
             case ELASTICSEARCH  -> new ElasticsearchAdapter(config);
             case REDIS          -> new RedisAdapter(config);

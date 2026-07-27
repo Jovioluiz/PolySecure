@@ -86,7 +86,7 @@ class SqlPolyParserTest {
         var stmt = (SelectStatement) facade.parse(
             "SELECT * FROM postgres.users WHERE id > 100");
         var cmp = (Condition.Compare) stmt.where();
-        assertThat(((Expr.Literal) cmp.right()).value()).isEqualTo(100.0);
+        assertThat(((Expr.Literal) cmp.right()).value()).isEqualTo(100L);
     }
 
     // ── Phase 2: INSERT ──────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ class SqlPolyParserTest {
         assertThat(stmt.clauses()).hasSize(2);
         assertThat(stmt.clauses().get(0).storeName()).isEqualTo("pg");
         assertThat(stmt.clauses().get(0).columns()).containsExactly("id", "total");
-        assertThat(stmt.clauses().get(0).values()).containsExactly(1.0, 150.0);
+        assertThat(stmt.clauses().get(0).values()).containsExactly(1L, 150.0);
     }
 
     // ── Phase 2: UPDATE ──────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ class SqlPolyParserTest {
         var stmt = (SelectStatement) facade.parse(
             "SELECT * FROM pg.orders WHERE id IN (1, 2, 3)");
         var in = (Condition.In) stmt.where();
-        assertThat(in.values()).containsExactly(1.0, 2.0, 3.0);
+        assertThat(in.values()).containsExactly(1L, 2L, 3L);
     }
 
     @Test
@@ -227,7 +227,7 @@ class SqlPolyParserTest {
             "SELECT * FROM pg.orders WHERE id NOT IN (5, 6)");
         var not = (Condition.Not) stmt.where();
         var in = (Condition.In) not.inner();
-        assertThat(in.values()).containsExactly(5.0, 6.0);
+        assertThat(in.values()).containsExactly(5L, 6L);
     }
 
     @Test

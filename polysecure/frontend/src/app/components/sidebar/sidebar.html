@@ -34,7 +34,12 @@
               <option value="SQLSERVER">SQL Server</option>
               <option value="ORACLE">Oracle</option>
               <option value="SNOWFLAKE">Snowflake</option>
-              <option value="CLICKHOUSE">ClickHouse</option>
+              <option value="SQLITE">SQLite</option>
+              <option value="FIREBIRD">Firebird</option>
+            </optgroup>
+            <optgroup label="Analytics / Cloud">
+              <option value="DATABRICKS">Databricks</option>
+              <option value="DOLPHINDB">DolphinDB</option>
             </optgroup>
             <optgroup label="NoSQL / Grafos">
               <option value="MONGODB">MongoDB</option>
@@ -49,27 +54,31 @@
             </optgroup>
           </select>
         </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>Host</label>
-            <input [(ngModel)]="form.host" placeholder="localhost" autocomplete="off" />
+        @if (!isFileBased()) {
+          <div class="form-row">
+            <div class="form-field">
+              <label>Host</label>
+              <input [(ngModel)]="form.host" [placeholder]="hostPlaceholder()" autocomplete="off" />
+            </div>
+            <div class="form-field form-field--port">
+              <label>Porta</label>
+              <input type="number" [(ngModel)]="form.port" />
+            </div>
           </div>
-          <div class="form-field form-field--port">
-            <label>Porta</label>
-            <input type="number" [(ngModel)]="form.port" />
-          </div>
-        </div>
+        }
         <div class="form-field">
           <label>Database</label>
-          <input [(ngModel)]="form.database" placeholder="meu_banco" autocomplete="off" />
+          <input [(ngModel)]="form.database" [placeholder]="databasePlaceholder()" autocomplete="off" />
         </div>
-        <div class="form-field">
-          <label>Usuário</label>
-          <input [(ngModel)]="form.username" placeholder="(opcional)" autocomplete="off" />
-        </div>
+        @if (showUsername()) {
+          <div class="form-field">
+            <label>Usuário</label>
+            <input [(ngModel)]="form.username" placeholder="(opcional)" autocomplete="off" />
+          </div>
+        }
         <div class="form-field">
           <label>Senha</label>
-          <input type="password" [(ngModel)]="form.password" placeholder="(opcional)" autocomplete="off" />
+          <input type="password" [(ngModel)]="form.password" [placeholder]="passwordPlaceholder()" autocomplete="off" />
         </div>
 
         @if (formError()) {
@@ -90,12 +99,12 @@
     } @else if (catalog.stores().length === 0) {
       <div class="sidebar-item muted">Nenhum store registrado</div>
     } @else {
-      @for (store of catalog.stores(); track store) {
+      @for (store of catalog.stores(); track store.name) {
         <div class="sidebar-item">
-          <span class="store-dot" [style.background]="storeColor(store)"></span>
-          <span class="store-name">{{ store }}</span>
-          <span class="sidebar-badge" [class]="storeBadgeClass(store)">{{ storeBadgeLabel(store) }}</span>
-          <button class="btn-remove" (click)="deleteStore(store)" title="Remover store">×</button>
+          <span class="store-dot" [style.background]="storeColor(store.type)"></span>
+          <span class="store-name">{{ store.name }}</span>
+          <span class="sidebar-badge" [class]="storeBadgeClass(store.type)">{{ storeTypeLabel(store.type) }}</span>
+          <button class="btn-remove" (click)="deleteStore(store.name)" title="Remover store">×</button>
         </div>
       }
     }
@@ -116,7 +125,7 @@
           <div class="table-cols">
             @for (col of entry.value; track col.name) {
               <div class="col-item">
-                <span class="store-dot small" [style.background]="storeColor(col.store)"></span>
+                <span class="store-dot small" [style.background]="storeColorByName(col.store)"></span>
                 <span class="col-name">{{ col.name }}</span>
                 <span class="col-type">{{ col.type }}</span>
                 @if (col.primaryKey) {

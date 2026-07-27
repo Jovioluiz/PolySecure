@@ -46,7 +46,14 @@ public class CatalogController {
     }
 
     @GetMapping("/stores")
-    public List<String> listStores() {
-        return new ArrayList<>(storeRegistry.listNames());
+    public List<Map<String, Object>> listStores() {
+        return storeRegistry.getConfigs().stream()
+            .map(c -> {
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("name", c.name());
+                info.put("type", c.type().name());
+                return info;
+            })
+            .collect(Collectors.toList());
     }
 }

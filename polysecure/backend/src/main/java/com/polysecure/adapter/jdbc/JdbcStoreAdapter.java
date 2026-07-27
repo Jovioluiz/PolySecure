@@ -32,12 +32,38 @@ public abstract class JdbcStoreAdapter implements StoreAdapter {
 
     protected JdbcStoreAdapter(String storeName, String jdbcUrl,
                                String username, String password) {
+        this(storeName, jdbcUrl, username, password, Map.of());
+    }
+
+    /**
+     * Some drivers (e.g. Databricks' Simba-based driver) don't honor the standard JDBC
+     * "user"/"password" properties that HikariConfig#setUsername/setPassword populate —
+     * they require their own connection property names (e.g. "UID"/"PWD"). extraProperties
+     * is passed straight to HikariConfig#addDataSourceProperty for those cases.
+     */
+    protected JdbcStoreAdapter(String storeName, String jdbcUrl,
+                               String username, String password,
+                               Map<String, String> extraProperties) {
+        this(storeName, jdbcUrl, username, password, extraProperties, 5);
+    }
+
+    /**
+     * maxPoolSize lets a subclass pin the pool to a single connection when the target
+     * store scopes session state to the physical connection (e.g. DolphinDB's unshared
+     * in-memory tables are only visible on the connection that created them — pooling
+     * multiple connections would make a table created by one statement invisible to the
+     * next).
+     */
+    protected JdbcStoreAdapter(String storeName, String jdbcUrl,
+                               String username, String password,
+                               Map<String, String> extraProperties, int maxPoolSize) {
         this.storeName = storeName;
         HikariConfig cfg = new HikariConfig();
         cfg.setJdbcUrl(jdbcUrl);
         if (username != null && !username.isBlank()) cfg.setUsername(username);
         if (password != null && !password.isBlank()) cfg.setPassword(password);
-        cfg.setMaximumPoolSize(5);
+        extraProperties.forEach(cfg::addDataSourceProperty);
+        cfg.setMaximumPoolSize(maxPoolSize);
         cfg.setPoolName("ps-" + storeName);
         cfg.setConnectionTimeout(10_000);
         this.dataSource = new HikariDataSource(cfg);

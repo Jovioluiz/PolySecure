@@ -12,7 +12,8 @@ import { ColumnDef } from '../models/types';
 
 export type StoreType =
   | 'POSTGRES' | 'MONGODB' | 'NEO4J'
-  | 'MYSQL' | 'MARIADB' | 'SQLSERVER' | 'ORACLE' | 'SNOWFLAKE' | 'CLICKHOUSE'
+  | 'MYSQL' | 'MARIADB' | 'SQLSERVER' | 'ORACLE' | 'SNOWFLAKE' | 'SQLITE' | 'FIREBIRD'
+  | 'DATABRICKS' | 'DOLPHINDB'
   | 'ELASTICSEARCH' | 'REDIS' | 'CASSANDRA' | 'SOLR' | 'KAFKA';
 
 export interface StorePayload {
@@ -25,11 +26,16 @@ export interface StorePayload {
   password: string | null;
 }
 
+export interface StoreInfo {
+  name: string;
+  type: StoreType;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly http = inject(HttpClient);
 
-  readonly stores = signal<string[]>([]);
+  readonly stores = signal<StoreInfo[]>([]);
   readonly tables = signal<Record<string, ColumnDef[]>>({});
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -38,7 +44,7 @@ export class CatalogService {
     this.loading.set(true);
     this.error.set(null);
     forkJoin([
-      this.http.get<string[]>(`${environment.apiBase}/catalog/stores`),
+      this.http.get<StoreInfo[]>(`${environment.apiBase}/catalog/stores`),
       this.http.get<Record<string, ColumnDef[]>>(`${environment.apiBase}/catalog/tables`),
     ]).subscribe({
       next: ([stores, tables]) => {

@@ -195,11 +195,12 @@ h3 {
   border-radius: 10px;
   font-weight: 500;
   flex-shrink: 0;
+  white-space: nowrap;
 
-  &.badge-pg  { background: rgba(63,185,80,.15);  color: var(--green);  }
-  &.badge-mg  { background: rgba(188,140,255,.15); color: var(--purple); }
-  &.badge-neo { background: rgba(210,153,34,.15);  color: var(--yellow); }
-  &.badge-def { background: rgba(88,166,255,.15);  color: var(--accent); }
+  &.badge-relational { background: rgba(63,185,80,.15);   color: var(--green);  }
+  &.badge-analytics  { background: rgba(210,153,34,.15);  color: var(--yellow); }
+  &.badge-nosql      { background: rgba(188,140,255,.15); color: var(--purple); }
+  &.badge-search     { background: rgba(88,166,255,.15);  color: var(--accent); }
 }
 
 .store-dot {

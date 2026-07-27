@@ -369,11 +369,21 @@ public class SqlPolyVisitorImpl extends SqlPolyBaseVisitor<Object> {
             String text = ctx.STRING_LITERAL().getText();
             return text.substring(1, text.length() - 1).replace("''", "'");
         }
-        if (ctx.NUMBER()  != null) return Double.parseDouble(ctx.NUMBER().getText());
+        if (ctx.NUMBER()  != null) return parseNumber(ctx.NUMBER().getText());
         if (ctx.K_TRUE()  != null) return true;
         if (ctx.K_FALSE() != null) return false;
         if (ctx.K_NULL()  != null) return null;
         throw new ParseException("Unknown literal: " + ctx.getText());
+    }
+
+    // Whole numbers parse as Long so they round-trip cleanly through strict JDBC drivers
+    // (e.g. DolphinDB rejects a Double bound to a LONG column: "Cannot convert double to DT_LONG").
+    // Numbers with a decimal point or exponent still parse as Double.
+    private Object parseNumber(String text) {
+        if (text.indexOf('.') < 0 && text.indexOf('e') < 0 && text.indexOf('E') < 0) {
+            try { return Long.parseLong(text); } catch (NumberFormatException ignored) {}
+        }
+        return Double.parseDouble(text);
     }
 
     private String stripQuotes(String s) {

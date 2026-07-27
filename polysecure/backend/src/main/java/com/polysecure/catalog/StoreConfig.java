@@ -19,7 +19,9 @@ public record StoreConfig(
         // Original
         POSTGRES, MONGODB, NEO4J,
         // JDBC relational
-        MYSQL, MARIADB, SQLSERVER, ORACLE, SNOWFLAKE, CLICKHOUSE,
+        MYSQL, MARIADB, SQLSERVER, ORACLE, SNOWFLAKE, SQLITE, FIREBIRD,
+        // Analytics / cloud warehouse
+        DATABRICKS, DOLPHINDB,
         // NoSQL / Search / Streaming
         ELASTICSEARCH, REDIS, CASSANDRA, SOLR, KAFKA
     }
