@@ -7,6 +7,22 @@
   "username" : "root",
   "password" : "mariaDB"
 }, {
+  "name" : "dolp",
+  "type" : "DOLPHINDB",
+  "host" : "localhost",
+  "port" : 8848,
+  "database" : "teste",
+  "username" : "",
+  "password" : ""
+}, {
+  "name" : "sqlite",
+  "type" : "SQLITE",
+  "host" : "localhost",
+  "port" : 0,
+  "database" : "C:\\Users\\jovio\\apps\\sqlite\\sqllite.db",
+  "username" : "",
+  "password" : ""
+}, {
   "name" : "solr",
   "type" : "SOLR",
   "host" : "localhost",
@@ -15,11 +31,27 @@
   "username" : "",
   "password" : ""
 }, {
-  "name" : "pg",
-  "type" : "POSTGRES",
+  "name" : "mss",
+  "type" : "SQLSERVER",
   "host" : "localhost",
-  "port" : 5433,
-  "database" : "polysecure",
-  "username" : "postgres",
-  "password" : "postgres"
+  "port" : 1433,
+  "database" : "LojaTeste",
+  "username" : "sa",
+  "password" : "MaverickV8302!"
+}, {
+  "name" : "fb",
+  "type" : "FIREBIRD",
+  "host" : "localhost",
+  "port" : 3050,
+  "database" : "C:\\Users\\jovio\\Documents\\MEUBANCO.FDB",
+  "username" : "SYSDBA",
+  "password" : "firebird"
+}, {
+  "name" : "lite",
+  "type" : "SQLITE",
+  "host" : "localhost",
+  "port" : 0,
+  "database" : "C:\\Users\\jovio\\apps\\sqlite\\sqllite.db",
+  "username" : "",
+  "password" : ""
 } ]

@@ -1,0 +1,24 @@
+{
+  "produtos" : [ {
+    "name" : "id",
+    "type" : "INT",
+    "store" : "dolp",
+    "primaryKey" : true
+  }, {
+    "name" : "nome",
+    "type" : "TEXT",
+    "store" : "dolp",
+    "primaryKey" : false
+  } ],
+  "fb_produtos" : [ {
+    "name" : "id",
+    "type" : "INT",
+    "store" : "fb",
+    "primaryKey" : true
+  }, {
+    "name" : "nome",
+    "type" : "TEXT",
+    "store" : "fb",
+    "primaryKey" : false
+  } ]
+}
