@@ -100,7 +100,7 @@ Autenticação JWT (JJWT 0.12.6), RBAC com permissões por store, anonimização
 Estimativa de cardinalidade por adapter (`estimateCardinality`), `StatsRegistry` (cache TTL 60s), `LinearCostModel` (gradiente online, inspirado no AWESOME/UCSD 2021), `CostEstimator`. Reordenamento de JOINs por cardinalidade ascendente. DML paralelo com virtual threads Java 21. Endpoint `GET /admin/stats`.
 
 ### 🔄 Fase 5 — Adaptadores dinâmicos + segurança avançada (planejada)
-RBAC por coluna, refresh tokens, adaptadores para MySQL/MariaDB, SQL Server, Oracle, Cassandra, Elasticsearch, ClickHouse e outros.
+RBAC por coluna, refresh tokens, adaptadores para MySQL/MariaDB, SQL Server, Oracle, Cassandra, Elasticsearch, Databricks e outros.
 
 ---
 
