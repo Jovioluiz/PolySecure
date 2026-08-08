@@ -13,6 +13,7 @@ import com.polysecure.model.*;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.resps.ScanResult;
 
@@ -56,7 +57,15 @@ public class RedisAdapter implements StoreAdapter {
                     new ScanParams().match(prefix + "*").count(1000));
                 cursor = scan.getCursor();
                 for (String key : scan.getResult()) {
-                    Map<String, String> hash = jedis.hgetAll(key);
+                    Map<String, String> hash;
+                    try {
+                        hash = jedis.hgetAll(key);
+                    } catch (JedisDataException e) {
+                        // Key matches "{table}:*" but isn't a Hash (e.g. a String/Set/List
+                        // under the same prefix from another convention) — skip, don't fail the whole SELECT.
+                        if (e.getMessage() != null && e.getMessage().startsWith("WRONGTYPE")) continue;
+                        throw e;
+                    }
                     if (hash != null && !hash.isEmpty()) {
                         Map<String, Object> row = new LinkedHashMap<>(hash);
                         if (query.where() == null || matches(query.where(), row)) {

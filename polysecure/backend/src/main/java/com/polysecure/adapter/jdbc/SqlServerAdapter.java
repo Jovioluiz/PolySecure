@@ -70,7 +70,7 @@ public class SqlServerAdapter extends JdbcStoreAdapter {
     @Override
     protected String toSqlType(String type) {
         return switch (type.toUpperCase()) {
-            case "INT", "INTEGER"              -> "INT IDENTITY(1,1)";
+            case "INT", "INTEGER"              -> "INT";
             case "TEXT", "STRING", "VARCHAR"   -> "NVARCHAR(MAX)";
             case "BOOLEAN", "BOOL"             -> "BIT";
             case "FLOAT", "DOUBLE"             -> "FLOAT";

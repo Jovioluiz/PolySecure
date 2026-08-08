@@ -56,7 +56,7 @@ public class MysqlAdapter extends JdbcStoreAdapter {
     @Override
     protected String toSqlType(String type) {
         return switch (type.toUpperCase()) {
-            case "INT", "INTEGER"              -> "INT AUTO_INCREMENT";
+            case "INT", "INTEGER"              -> "INT";
             case "TEXT", "STRING", "VARCHAR"   -> "TEXT";
             case "BOOLEAN", "BOOL"             -> "TINYINT(1)";
             case "FLOAT", "DOUBLE"             -> "DOUBLE";

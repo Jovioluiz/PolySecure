@@ -83,7 +83,7 @@ public class OracleAdapter extends JdbcStoreAdapter {
     @Override
     protected String toSqlType(String type) {
         return switch (type.toUpperCase()) {
-            case "INT", "INTEGER"              -> "NUMBER(10) GENERATED ALWAYS AS IDENTITY";
+            case "INT", "INTEGER"              -> "NUMBER(10)";
             case "TEXT", "STRING", "VARCHAR"   -> "VARCHAR2(4000)";
             case "BOOLEAN", "BOOL"             -> "NUMBER(1)";
             case "FLOAT", "DOUBLE"             -> "NUMBER(19,4)";

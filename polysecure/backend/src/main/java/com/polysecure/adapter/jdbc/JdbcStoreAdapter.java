@@ -78,7 +78,22 @@ public abstract class JdbcStoreAdapter implements StoreAdapter {
     public List<Map<String, Object>> select(LocalSelectQuery query) {
         SqlBuilder builder = new SqlBuilder();
         String sql = builder.build(query);
-        return jdbc.queryForList(sql, builder.params().toArray());
+        List<Map<String, Object>> rows = jdbc.queryForList(sql, builder.params().toArray());
+        return rows.stream().map(this::lowercaseKeys).collect(Collectors.toList());
+    }
+
+    /**
+     * Some dialects (Oracle, SQL Server) fold unquoted identifiers to uppercase and the
+     * JDBC driver reports column labels in that same case, while others (Postgres, MySQL)
+     * preserve the case as defined. Left unnormalized, a cross-store UNION/JOIN ends up with
+     * rows whose key casing differs by store of origin (e.g. "id" vs "ID"), which breaks any
+     * exact-key lookup downstream — including the frontend results table, which derives its
+     * columns from the first row only.
+     */
+    private Map<String, Object> lowercaseKeys(Map<String, Object> row) {
+        Map<String, Object> normalized = new java.util.LinkedHashMap<>();
+        row.forEach((k, v) -> normalized.put(k.toLowerCase(), v));
+        return normalized;
     }
 
     // ── DDL ─────────────────────────────────────────────────────────────────

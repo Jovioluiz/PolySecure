@@ -24,11 +24,16 @@ public class DatabricksAdapter extends JdbcStoreAdapter {
         // properties HikariConfig#setUsername/setPassword would set — it requires the
         // literal "UID"/"PWD" connection property names, hence extraProperties here instead
         // of the username/password constructor args.
+        // EnableArrow=0 disables Arrow-based result deserialization, which relies on
+        // sun.misc.Unsafe / DirectByteBuffer reflection that the JDK module system blocks
+        // by default from JDK 17+ (error 500618). Falling back to the legacy row-based wire
+        // format avoids the issue entirely, independent of JVM flags or JDK version.
         super(config.name(),
             "jdbc:databricks://" + config.host() + ":" + config.port()
                 + ";HttpPath=/sql/1.0/warehouses/" + config.database(),
             null, null,
-            Map.of("AuthMech", "3", "UID", "token", "PWD", config.password() != null ? config.password() : ""));
+            Map.of("AuthMech", "3", "UID", "token", "PWD", config.password() != null ? config.password() : "",
+                "EnableArrow", "0"));
     }
 
     @Override
@@ -57,7 +62,7 @@ public class DatabricksAdapter extends JdbcStoreAdapter {
     @Override
     protected String toSqlType(String type) {
         return switch (type.toUpperCase()) {
-            case "INT", "INTEGER"              -> "BIGINT GENERATED ALWAYS AS IDENTITY";
+            case "INT", "INTEGER"              -> "BIGINT";
             case "TEXT", "STRING", "VARCHAR"   -> "STRING";
             case "BOOLEAN", "BOOL"             -> "BOOLEAN";
             case "FLOAT", "DOUBLE"             -> "DOUBLE";

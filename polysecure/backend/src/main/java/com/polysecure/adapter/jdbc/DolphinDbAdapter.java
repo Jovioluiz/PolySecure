@@ -9,12 +9,21 @@ package com.polysecure.adapter.jdbc;
 import com.polysecure.adapter.StoreCapabilities;
 import com.polysecure.catalog.StoreConfig;
 import com.polysecure.model.ColumnDefinition;
+import com.polysecure.model.Condition;
+import com.polysecure.model.LocalSelectQuery;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class DolphinDbAdapter extends JdbcStoreAdapter {
+
+    private final String databasePath;
+    // Idempotency guard so ensureLoaded() only pays the round-trip once per table per adapter
+    // lifetime, not on every single/select/insert/update/delete call.
+    private final Set<String> loadAttempted = ConcurrentHashMap.newKeySet();
 
     // Pool pinned to 1 connection: createTable()'s plain (unshared) DolphinDB table is only
     // visible on the session that created it, so every statement must reuse that same session.
@@ -22,11 +31,82 @@ public class DolphinDbAdapter extends JdbcStoreAdapter {
         super(config.name(),
             "jdbc:dolphindb://" + config.host() + ":" + config.port(),
             config.username(), config.password(), Map.of(), 1);
+        this.databasePath = config.database();
     }
 
-    // DolphinDB's SQL dialect has no CREATE TABLE IF NOT EXISTS — tolerate "already exists"
+    // Tables that live on disk (created outside PolySecure via database()+createTable/saveTable,
+    // or surviving a server restart) are NOT visible to a fresh session as bare names — DolphinDB
+    // resolves unqualified identifiers only against in-session variables and shared globals, so
+    // "SELECT * FROM t1" fails with "Can't find the object with name t1" until the table has been
+    // loadTable()'d and shared at least once. This makes that happen lazily and once per table.
+    //
+    // Deliberately NOT wrapped in a DolphinDB-side `if(existsDatabase(...) and existsTable(...))`
+    // guard: through this driver, wrapping the share statement inside an if{} block (with or
+    // without a nested try{}catch(){}) makes jdbc.execute() report success while the share
+    // silently never happens — reproduced and confirmed against a live server, cause unclear
+    // (suspect a driver-side script-batching quirk specific to multi-statement/braced scripts).
+    // A bare top-level `share loadTable(...) as table;` does not have this problem. The downside
+    // is a failed round-trip (caught below) for tables that aren't on-disk objects at all — a
+    // one-time cost per table thanks to loadAttempted.
+    private void ensureLoaded(String table) {
+        if (databasePath == null || databasePath.isBlank() || !loadAttempted.add(table)) return;
+        String path = databasePath.replace('\\', '/');
+        String script = "share loadTable(\"" + path + "\", \"" + table + "\") as " + table + ";";
+        try {
+            jdbc.execute(script);
+        } catch (Exception ignored) {
+            // best-effort: table isn't an on-disk object at this path — subsequent SQL surfaces
+            // its own clear error if `table` doesn't resolve any other way either
+        }
+    }
+
+    // Probes whether `table` resolves to *some* object in the current session (in-memory,
+    // on-disk-and-loaded, or shared) — used to decide whether createTable() should skip issuing
+    // CREATE TABLE (which would otherwise define a new, empty, session-local table that shadows
+    // any already-loaded on-disk table of the same name). Uses queryForList rather than
+    // queryForObject(..., Long.class): DolphinDB's count(*) comes back as a plain Integer for
+    // small tables, and Spring would throw ClassCastException trying to coerce it to Long.
+    private boolean tableResolvable(String table) {
+        try {
+            jdbc.queryForList("select count(*) from " + table);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public List<Map<String, Object>> select(LocalSelectQuery query) {
+        ensureLoaded(query.table());
+        return super.select(query);
+    }
+
+    @Override
+    public void insert(String table, Map<String, Object> values) {
+        ensureLoaded(table);
+        super.insert(table, values);
+    }
+
+    @Override
+    public int update(String table, Map<String, Object> updates, Condition where) {
+        ensureLoaded(table);
+        return super.update(table, updates, where);
+    }
+
+    @Override
+    public int delete(String table, Condition where) {
+        ensureLoaded(table);
+        return super.delete(table, where);
+    }
+
+    // DolphinDB's SQL dialect has no CREATE TABLE IF NOT EXISTS — tolerate "already exists".
+    // Also: if the table already exists physically in the configured on-disk database, load and
+    // share it instead of issuing CREATE TABLE — a plain CREATE TABLE would otherwise define a
+    // brand-new, empty, session-local table that shadows the real on-disk data under the same name.
     @Override
     public void createTable(String table, List<ColumnDefinition> columns) {
+        ensureLoaded(table);
+        if (tableResolvable(table)) return;
         String cols = columns.stream()
             .map(c -> c.name() + " " + toSqlType(c.type()))
             .collect(Collectors.joining(", "));
@@ -50,9 +130,12 @@ public class DolphinDbAdapter extends JdbcStoreAdapter {
 
     @Override
     public long estimateCardinality(String table) {
+        ensureLoaded(table);
         try {
-            Long c = jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class);
-            return c != null ? c : 0L;
+            // count(*) comes back as a plain Integer for small tables — Number sidesteps the
+            // ClassCastException that querying as Long.class would throw in that case.
+            Number c = jdbc.queryForObject("SELECT count(*) FROM " + table, Number.class);
+            return c != null ? c.longValue() : 0L;
         } catch (Exception e) {
             return Long.MAX_VALUE;
         }
