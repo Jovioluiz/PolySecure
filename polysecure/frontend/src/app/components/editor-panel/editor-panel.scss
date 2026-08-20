@@ -58,6 +58,20 @@
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
+.timeout-select {
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  option { background: var(--surface); color: var(--muted); }
+}
+
 .btn-run {
   padding: 5px 16px;
   border-radius: var(--radius);

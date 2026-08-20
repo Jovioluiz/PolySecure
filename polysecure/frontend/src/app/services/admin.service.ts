@@ -34,6 +34,13 @@ export interface AuditRecord {
   durationMs: number;
 }
 
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  logger: string;
+  message: string;
+}
+
 export interface CostModel {
   featureNames: string[];
   weights: number[];
@@ -41,9 +48,19 @@ export interface CostModel {
   description: string;
 }
 
+export interface IndexSuggestion {
+  store: string;
+  table: string;
+  column: string;
+  occurrences: number;
+  observations: number;
+  frequency: number;
+}
+
 export interface StatsResponse {
   cardinalityCache: Record<string, number>;
   costModel: CostModel;
+  indexSuggestions: IndexSuggestion[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -54,6 +71,7 @@ export class AdminService {
   readonly views = signal<ViewStats[]>([]);
   readonly audit = signal<AuditRecord[]>([]);
   readonly stats = signal<StatsResponse | null>(null);
+  readonly logs = signal<LogEntry[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -64,12 +82,14 @@ export class AdminService {
       views: this.http.get<ViewStats[]>(`${environment.apiBase}/admin/views`),
       audit: this.http.get<AuditRecord[]>(`${environment.apiBase}/admin/audit?limit=20`),
       stats: this.http.get<StatsResponse>(`${environment.apiBase}/admin/stats`),
+      logs: this.http.get<LogEntry[]>(`${environment.apiBase}/admin/logs?limit=200`),
     }).subscribe({
       next: res => {
         this.health.set(res.health);
         this.views.set(res.views);
         this.audit.set(res.audit.slice().reverse());
         this.stats.set(res.stats);
+        this.logs.set(res.logs.slice().reverse());
         this.loading.set(false);
         this.error.set(null);
       },

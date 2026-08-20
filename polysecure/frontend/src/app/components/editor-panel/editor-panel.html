@@ -25,9 +25,20 @@
           ⇄ {{ translating() ? 'Traduzindo…' : 'Ver SQL-Poly' }}
         </button>
       }
+      <select
+        class="timeout-select"
+        [disabled]="running()"
+        [ngModel]="timeoutMs()"
+        (ngModelChange)="timeoutMs.set($event)"
+        title="Tempo máximo de espera pela resposta — a consulta pode continuar rodando no servidor mesmo após esse limite"
+      >
+        @for (preset of timeoutPresets; track preset.label) {
+          <option [ngValue]="preset.valueMs">Timeout: {{ preset.label }}</option>
+        }
+      </select>
       <button class="btn-run" [disabled]="running()" (click)="run()">
         @if (running()) {
-          <span class="spinner"></span> Executando…
+          <span class="spinner"></span> Executando… {{ elapsedSeconds() }}s
         } @else {
           ▶ Executar <span class="key-hint">F5</span>
         }

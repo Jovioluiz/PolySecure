@@ -94,6 +94,13 @@
             <artifactId>jsqlparser</artifactId>
             <version>4.9</version>
         </dependency>
+        <dependency>
+            <!-- Cost-based join reordering only (CalciteJoinOrderOptimizer) — not used for
+                 SQL parsing/validation, which stays on the SqlPoly ANTLR grammar. -->
+            <groupId>org.apache.calcite</groupId>
+            <artifactId>calcite-core</artifactId>
+            <version>1.38.0</version>
+        </dependency>
 
         <!-- ── Adapters: original ─────────────────────────────────────── -->
         <dependency>

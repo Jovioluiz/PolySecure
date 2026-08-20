@@ -65,6 +65,35 @@
         }
       </section>
 
+      <!-- Adaptive index suggestions -->
+      <section class="card card-wide">
+        <h3>Índices Sugeridos</h3>
+        @if (admin.stats(); as s) {
+          @if (s.indexSuggestions.length === 0) {
+            <div class="empty">Nenhuma sugestão ainda — requer histórico de queries com WHERE repetido</div>
+          } @else {
+            <table>
+              <thead>
+                <tr><th>Store</th><th>Tabela</th><th>Coluna</th><th>Ocorrências</th><th>Frequência</th></tr>
+              </thead>
+              <tbody>
+                @for (idx of s.indexSuggestions; track idx.store + idx.table + idx.column) {
+                  <tr>
+                    <td>{{ idx.store }}</td>
+                    <td class="muted">{{ idx.table }}</td>
+                    <td class="mono">{{ idx.column }}</td>
+                    <td class="muted">{{ idx.occurrences }} / {{ idx.observations }}</td>
+                    <td class="muted">{{ (idx.frequency * 100).toFixed(0) }}%</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        } @else {
+          <div class="empty">Sem dados</div>
+        }
+      </section>
+
       <!-- Materialized views / cache -->
       <section class="card card-wide">
         <h3>Views Materializadas (Cache)</h3>
@@ -112,6 +141,34 @@
               }
             </tbody>
           </table>
+        }
+      </section>
+
+      <!-- Live application logs -->
+      <section class="card card-wide">
+        <h3>Logs da Aplicação</h3>
+        @if (admin.logs().length === 0) {
+          <div class="empty">Nenhum log capturado ainda</div>
+        } @else {
+          <div class="log-scroll">
+            <table>
+              <thead>
+                <tr><th>Hora</th><th>Nível</th><th>Logger</th><th>Mensagem</th></tr>
+              </thead>
+              <tbody>
+                @for (l of admin.logs(); track l.timestamp + l.logger + l.message) {
+                  <tr>
+                    <td class="muted">{{ formatTime(l.timestamp) }}</td>
+                    <td>
+                      <span class="level-badge" [class]="'level-' + l.level.toLowerCase()">{{ l.level }}</span>
+                    </td>
+                    <td class="muted mono">{{ shortLogger(l.logger) }}</td>
+                    <td class="mono">{{ truncate(l.message, 120) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
       </section>
 

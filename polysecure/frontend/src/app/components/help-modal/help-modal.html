@@ -24,30 +24,41 @@
         @if (activeTab() === 'standard') {
           <section class="help-section">
             <p class="help-intro">
-              O modo <strong>SQL Padrão</strong> envia a query diretamente ao PostgreSQL.
-              Use o prefixo <code>store.tabela</code> para indicar em qual store a tabela está.
+              O modo <strong>SQL Padrão</strong> aceita SQL convencional (dialeto PostgreSQL).
+              Antes de executar, o PolySecure tenta traduzir a query para SQL-Poly:
             </p>
+            <ul>
+              <li>Tabela com prefixo <code>store.tabela</code> (ex.: <code>pg.users</code>) passa direto, igual ao modo SQL-Poly — inclusive JOIN escrito manualmente entre stores.</li>
+              <li>Tabela <strong>sem prefixo</strong> que seja o nome lógico de uma <code>CREATE POLYSTORE TABLE</code> é resolvida automaticamente pelo catálogo: se estiver em uma única store, o prefixo é adicionado sozinho; se estiver distribuída em várias stores, o PolySecure gera o JOIN cross-store por conta própria (pela chave primária).</li>
+              <li>Clique em <strong>"Ver SQL-Poly"</strong> na barra de ferramentas do editor para visualizar a tradução antes de executar.</li>
+            </ul>
 
             <h3>Selecionar dados</h3>
-            <pre><code>-- Todos os registros de uma tabela
+            <pre><code>-- Com prefixo de store (passa direto para o engine)
 SELECT * FROM pg.users;
-
--- Com projeção de colunas
-SELECT id, name FROM pg.users;
-
--- Com filtro WHERE
 SELECT id, name FROM pg.users WHERE active = true;
 
 -- Com alias de tabela
 SELECT u.id, u.name
 FROM pg.users u
-WHERE u.id = 1;</code></pre>
+WHERE u.id = 1;
+
+-- Sem prefixo: "orders" é o nome lógico de uma POLYSTORE TABLE.
+-- Se "orders" estiver distribuída em pg + mg, o JOIN é gerado automaticamente.
+SELECT * FROM orders WHERE total > 100
+ORDER BY total DESC LIMIT 10;</code></pre>
+
+            <div class="help-tip">
+              <code>GROUP BY</code>/<code>HAVING</code> e funções de agregação (<code>COUNT</code>, <code>SUM</code>...)
+              não são preservados quando a tabela é resolvida sem prefixo pelo catálogo — nesse caso,
+              use o modo <strong>SQL-Poly</strong> ou qualifique a tabela com <code>store.tabela</code> diretamente.
+            </div>
 
             <h3>Convenções</h3>
             <ul>
-              <li>O prefixo (<code>pg</code>, <code>mg</code>, <code>neo</code>) é o nome da store registrada.</li>
-              <li>No modo padrão, apenas uma store por query — sem JOIN cross-store.</li>
-              <li>Para queries cross-store, use o modo <strong>SQL-Poly</strong>.</li>
+              <li>O prefixo (<code>pg</code>, <code>mg</code>, <code>neo</code>...) é o nome da store registrada.</li>
+              <li>Se a query não puder ser traduzida (sintaxe já é SQL-Poly, ou tabela desconhecida), ela é enviada sem alteração para o engine SQL-Poly.</li>
+              <li>Para controle total sobre JOIN, DDL, DML e agregações cross-store, use o modo <strong>SQL-Poly</strong>.</li>
             </ul>
           </section>
         }
@@ -66,6 +77,53 @@ FROM pg.users u
 JOIN mg.profiles p ON u.id = p.user_id
 WHERE u.active = true;</code></pre>
 
+            <h3>Operadores no WHERE</h3>
+            <pre><code>WHERE preco &gt;= 10 AND preco &lt;= 100
+WHERE status IN ('ativo', 'pendente')
+WHERE status NOT IN ('cancelado')
+WHERE descricao IS NULL
+WHERE descricao IS NOT NULL
+WHERE nome LIKE 'Prod%'
+WHERE nome NOT LIKE 'Teste%'
+WHERE preco BETWEEN 10 AND 50
+WHERE NOT (ativo = true)</code></pre>
+
+            <h3>Agregação, ordenação e paginação</h3>
+            <pre><code>-- GROUP BY / HAVING com funções de agregação: COUNT, SUM, AVG, MIN, MAX
+SELECT categoria, COUNT(*) AS total, AVG(preco) AS preco_medio
+FROM pg.produtos
+GROUP BY categoria
+HAVING COUNT(*) > 5
+ORDER BY total DESC
+LIMIT 10 OFFSET 0;</code></pre>
+
+            <h3>UNION / EXCEPT</h3>
+            <pre><code>SELECT nome FROM pg.clientes
+UNION
+SELECT nome FROM mg.leads;
+
+SELECT id FROM pg.produtos
+EXCEPT
+SELECT id FROM pg.produtos_descontinuados;</code></pre>
+
+            <h3>INSERT ... SELECT cross-store</h3>
+            <pre><code>-- Copia o resultado de um SELECT para tabelas físicas em outras stores
+-- (sem VALUES: os valores vêm das colunas do SELECT, na mesma ordem)
+INSERT INTO POLYSTORE orders_arquivo
+  pg (id, total)
+  mg (id, detalhes)
+SELECT id, total, detalhes FROM orders WHERE total &lt; 10;</code></pre>
+
+            <h3>CREATE INDEX / ALTER TABLE</h3>
+            <pre><code>CREATE INDEX idx_email ON pg.users (email);
+
+ALTER POLYSTORE TABLE orders ADD COLUMN cupom TEXT STORE pg;
+ALTER POLYSTORE TABLE orders DROP COLUMN cupom FROM STORE pg;</code></pre>
+
+            <h3>REGISTER STORE (via SQL, alternativa ao painel lateral)</h3>
+            <pre><code>REGISTER STORE pg POSTGRES 'localhost' 5432 'meu_banco' 'usuario' 'senha';
+REGISTER STORE mg MONGODB 'localhost' 27017 'meu_banco';</code></pre>
+
             <h3>DDL — Criar / Remover tabela</h3>
             <pre><code>-- Criar tabela distribuída em múltiplas stores
 CREATE POLYSTORE TABLE orders (
@@ -83,10 +141,25 @@ INSERT INTO POLYSTORE orders
   pg (id, total)    VALUES (1, 150.0)
   mg (id, detalhes) VALUES (1, 'descricao do produto');
 
+-- Não precisa de CREATE POLYSTORE TABLE antes: INSERT INTO POLYSTORE já grava
+-- direto nas tabelas físicas de cada store. Se o nome físico for diferente do
+-- nome lógico da tabela polystore, indique com "store.tabela_fisica(...)":
+INSERT INTO POLYSTORE produtos
+  mariadb (id, preco)          VALUES (1, 10.0)
+  fb.FB_PRODUTOS (id, valor)   VALUES (1, 20.0);
+
 -- UPDATE cross-store (atualiza pg e mg de uma vez)
 UPDATE POLYSTORE orders
   SET pg.total = 199.9,
       mg.detalhes = 'atualizado'
+  WHERE id = 1;
+
+-- O prefixo do SET é o nome da STORE, não um alias — não declare
+-- "UPDATE mariadb.produtos p" nem use "p." no SET, o parser rejeita.
+-- Se o nome físico for diferente do nome lógico, use "store.tabela_fisica.coluna":
+UPDATE POLYSTORE produtos
+  SET mariadb.preco          = 199.9,
+      fb.FB_PRODUTOS.valor   = 655.99
   WHERE id = 1;
 
 -- DELETE cross-store
@@ -94,10 +167,14 @@ DELETE FROM POLYSTORE orders WHERE id = 1;</code></pre>
 
             <h3>Tipos de coluna suportados</h3>
             <ul>
-              <li><code>INT</code>, <code>TEXT</code>, <code>FLOAT</code> — colunas relacionais (PostgreSQL)</li>
-              <li><code>DOCUMENT</code> — documento JSON (MongoDB)</li>
+              <li><code>INT</code>, <code>TEXT</code>, <code>FLOAT</code>, <code>BOOLEAN</code> — colunas relacionais (PostgreSQL e demais stores SQL: MySQL, MariaDB, SQL Server, Oracle, Snowflake, SQLite, Firebird, Databricks, DolphinDB)</li>
+              <li><code>DOCUMENT</code> — documento JSON (MongoDB; vira <code>JSONB</code> no Postgres)</li>
               <li><code>GRAPH</code> — nó ou relação (Neo4j)</li>
             </ul>
+            <div class="help-tip">
+              O tipo é texto livre repassado a cada adapter — tipos não reconhecidos caem
+              no tipo padrão da store (ex.: <code>TEXT</code> nos adapters relacionais).
+            </div>
           </section>
         }
 
@@ -109,7 +186,16 @@ DELETE FROM POLYSTORE orders WHERE id = 1;</code></pre>
               Para remover, passe o mouse sobre a store e clique em <code>×</code>.
             </p>
             <p class="help-intro">
-              Também é possível registrar via API REST usando um cliente HTTP (Postman, curl, Insomnia).
+              17 tipos de store são suportados hoje, agrupados no formulário como:
+              <strong>Relacionais</strong> (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Snowflake, SQLite, Firebird),
+              <strong>Analytics / Cloud</strong> (Databricks, DolphinDB),
+              <strong>NoSQL / Grafos</strong> (MongoDB, Neo4j, Redis, Cassandra) e
+              <strong>Busca / Streaming</strong> (Elasticsearch, Apache Solr, Apache Kafka).
+            </p>
+            <p class="help-intro">
+              Também é possível registrar via API REST usando um cliente HTTP (Postman, curl, Insomnia)
+              ou direto no editor, em modo <strong>SQL-Poly</strong>, com <code>REGISTER STORE</code>
+              (veja a aba anterior).
             </p>
 
             <h3>Endpoint de registro</h3>
@@ -160,7 +246,8 @@ Authorization: Bearer &lt;seu-token&gt;</code></pre>
 
             <div class="help-tip">
               Após registrar uma store, ela aparece automaticamente no painel lateral.
-              As stores ficam disponíveis enquanto o backend estiver em execução.
+              O registro é persistido em disco (<code>data/stores.json</code>) e recarregado
+              automaticamente quando o backend reinicia.
             </div>
           </section>
         }

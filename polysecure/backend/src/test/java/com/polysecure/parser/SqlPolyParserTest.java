@@ -105,6 +105,26 @@ class SqlPolyParserTest {
         assertThat(stmt.clauses().get(0).values()).containsExactly(1L, 150.0);
     }
 
+    @Test
+    void parsesInsertStatementWithPerStorePhysicalTable() {
+        // "fb.FB_PRODUTOS" targets a physical table whose name differs from the logical
+        // polystore table ("produtos") — omitting it (as "mariadb" does here) still falls
+        // back to the logical name, same as before this override existed.
+        var stmt = (InsertStatement) facade.parse("""
+            INSERT INTO POLYSTORE produtos
+                mariadb (id, preco) VALUES (1, 10.0)
+                fb.FB_PRODUTOS (id, valor) VALUES (1, 20.0)
+            """);
+        assertThat(stmt.tableName()).isEqualTo("produtos");
+        assertThat(stmt.clauses()).hasSize(2);
+        assertThat(stmt.clauses().get(0).storeName()).isEqualTo("mariadb");
+        assertThat(stmt.clauses().get(0).tableName()).isNull();
+        assertThat(stmt.clauses().get(0).effectiveTable(stmt.tableName())).isEqualTo("produtos");
+        assertThat(stmt.clauses().get(1).storeName()).isEqualTo("fb");
+        assertThat(stmt.clauses().get(1).tableName()).isEqualTo("FB_PRODUTOS");
+        assertThat(stmt.clauses().get(1).effectiveTable(stmt.tableName())).isEqualTo("FB_PRODUTOS");
+    }
+
     // ── Phase 2: UPDATE ──────────────────────────────────────────────────────
 
     @Test
@@ -120,6 +140,26 @@ class SqlPolyParserTest {
         assertThat(stmt.sets().get(0).column()).isEqualTo("status");
         assertThat(stmt.sets().get(0).value()).isEqualTo("shipped");
         assertThat(stmt.where()).isNotNull();
+    }
+
+    @Test
+    void parsesUpdateStatementWithPerStorePhysicalTable() {
+        // "fb.FB_PRODUTOS.valor" targets a physical table whose name differs from the logical
+        // polystore table ("produtos") — omitting it (as "mariadb.preco" does here) still falls
+        // back to the logical name, same override as INSERT's storeInsertClause.
+        var stmt = (UpdateStatement) facade.parse("""
+            UPDATE POLYSTORE produtos
+                SET mariadb.preco = 199.9, fb.FB_PRODUTOS.valor = 20.0
+                WHERE id = 1
+            """);
+        assertThat(stmt.sets()).hasSize(2);
+        assertThat(stmt.sets().get(0).store()).isEqualTo("mariadb");
+        assertThat(stmt.sets().get(0).physicalTable()).isNull();
+        assertThat(stmt.sets().get(0).effectiveTable(stmt.tableName())).isEqualTo("produtos");
+        assertThat(stmt.sets().get(1).store()).isEqualTo("fb");
+        assertThat(stmt.sets().get(1).physicalTable()).isEqualTo("FB_PRODUTOS");
+        assertThat(stmt.sets().get(1).column()).isEqualTo("valor");
+        assertThat(stmt.sets().get(1).effectiveTable(stmt.tableName())).isEqualTo("FB_PRODUTOS");
     }
 
     // ── Phase 2: DELETE ──────────────────────────────────────────────────────
@@ -199,6 +239,20 @@ class SqlPolyParserTest {
     }
 
     @Test
+    void parsesInsertSelectWithPerStorePhysicalTable() {
+        var stmt = (InsertSelectStatement) facade.parse("""
+            INSERT INTO POLYSTORE produtos
+              fb.FB_PRODUTOS (id, valor)
+            SELECT id, valor FROM pg.source_produtos
+            """);
+        assertThat(stmt.tableName()).isEqualTo("produtos");
+        assertThat(stmt.targets()).hasSize(1);
+        assertThat(stmt.targets().get(0).storeName()).isEqualTo("fb");
+        assertThat(stmt.targets().get(0).tableName()).isEqualTo("FB_PRODUTOS");
+        assertThat(stmt.targets().get(0).effectiveTable(stmt.tableName())).isEqualTo("FB_PRODUTOS");
+    }
+
+    @Test
     void parsesInsertSelectWithWhere() {
         var stmt = (InsertSelectStatement) facade.parse("""
             INSERT INTO POLYSTORE ativos pg (id, nome)
@@ -228,6 +282,60 @@ class SqlPolyParserTest {
         var not = (Condition.Not) stmt.where();
         var in = (Condition.In) not.inner();
         assertThat(in.values()).containsExactly(5L, 6L);
+    }
+
+    // ── Subqueries (gap 3.3) ──────────────────────────────────────────────────
+
+    @Test
+    void parsesInSubqueryCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE customer_id IN (SELECT id FROM pg.vip_customers)");
+        var in = (Condition.InSubquery) stmt.where();
+        assertThat(((Expr.Column) in.expr()).name()).isEqualTo("customer_id");
+        assertThat(in.subquery().from().table()).isEqualTo("vip_customers");
+    }
+
+    @Test
+    void parsesNotInSubqueryCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE customer_id NOT IN (SELECT id FROM pg.vip_customers)");
+        var not = (Condition.Not) stmt.where();
+        var in = (Condition.InSubquery) not.inner();
+        assertThat(in.subquery().from().table()).isEqualTo("vip_customers");
+    }
+
+    @Test
+    void parsesScalarSubqueryCondition() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE total > (SELECT AVG(total) FROM pg.orders)");
+        var cmp = (Condition.CompareSubquery) stmt.where();
+        assertThat(cmp.op()).isEqualTo(">");
+        assertThat(((Expr.Column) cmp.left()).name()).isEqualTo("total");
+        assertThat(cmp.subquery().projections()).hasSize(1);
+        assertThat(cmp.subquery().projections().get(0).isAggregate()).isTrue();
+    }
+
+    @Test
+    void parsesSubqueryTargetingADifferentStoreThanTheOuterQuery() {
+        // Not correlated — a subquery is a fully independent nested SELECT, free to target any
+        // registered store regardless of what the outer query's FROM/JOIN use.
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM mariadb.orders WHERE customer_id IN (SELECT id FROM mongo.vip_customers)");
+        var in = (Condition.InSubquery) stmt.where();
+        assertThat(in.subquery().from().store()).isEqualTo("mongo");
+    }
+
+    @Test
+    void parsesNestedSubqueryInsideASubquery() {
+        var stmt = (SelectStatement) facade.parse("""
+            SELECT * FROM pg.orders WHERE customer_id IN (
+                SELECT id FROM pg.customers WHERE region_id IN (
+                    SELECT id FROM pg.regions WHERE active = true
+                )
+            )""");
+        var outer = (Condition.InSubquery) stmt.where();
+        var inner = (Condition.InSubquery) outer.subquery().where();
+        assertThat(inner.subquery().from().table()).isEqualTo("regions");
     }
 
     @Test
@@ -289,5 +397,74 @@ class SqlPolyParserTest {
         var and = (Condition.And) stmt.where();
         assertThat(and.left()).isInstanceOf(Condition.Between.class);
         assertThat(and.right()).isInstanceOf(Condition.Compare.class);
+    }
+
+    // ── Arithmetic expressions ───────────────────────────────────────────────
+
+    @Test
+    void parsesArithmeticWithStandardPrecedence() {
+        // '*' must bind tighter than '+': price + (tax * 2), not (price + tax) * 2.
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE price + tax * 2 > 100");
+        var cmp = (Condition.Compare) stmt.where();
+        var left = (Expr.Arithmetic) cmp.left();
+        assertThat(left.op()).isEqualTo("+");
+        assertThat(((Expr.Column) left.left()).name()).isEqualTo("price");
+        var right = (Expr.Arithmetic) left.right();
+        assertThat(right.op()).isEqualTo("*");
+        assertThat(((Expr.Column) right.left()).name()).isEqualTo("tax");
+        assertThat(((Expr.Literal) right.right()).value()).isEqualTo(2L);
+    }
+
+    @Test
+    void parenthesesOverrideArithmeticPrecedence() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE (price + tax) * 2 > 100");
+        var cmp = (Condition.Compare) stmt.where();
+        var top = (Expr.Arithmetic) cmp.left();
+        assertThat(top.op()).isEqualTo("*");
+        var inner = (Expr.Arithmetic) top.left();
+        assertThat(inner.op()).isEqualTo("+");
+        assertThat(((Expr.Literal) top.right()).value()).isEqualTo(2L);
+    }
+
+    @Test
+    void parsesSubtractionAndDivision() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT * FROM pg.orders WHERE (total - discount) / 2 > 10");
+        var cmp = (Condition.Compare) stmt.where();
+        var div = (Expr.Arithmetic) cmp.left();
+        assertThat(div.op()).isEqualTo("/");
+        var sub = (Expr.Arithmetic) div.left();
+        assertThat(sub.op()).isEqualTo("-");
+    }
+
+    @Test
+    void parsesArithmeticInSelectListWithDefaultLabel() {
+        var stmt = (SelectStatement) facade.parse("SELECT (price * qty) FROM pg.orders");
+        var proj = stmt.projections().get(0);
+        assertThat(proj.isComputed()).isTrue();
+        assertThat(proj.isAggregate()).isFalse();
+        assertThat(proj.effectiveOutputName()).isEqualTo("(price * qty)");
+    }
+
+    @Test
+    void parsesArithmeticInSelectListWithExplicitAlias() {
+        var stmt = (SelectStatement) facade.parse("SELECT price * qty AS total FROM pg.orders");
+        var proj = stmt.projections().get(0);
+        assertThat(proj.isComputed()).isTrue();
+        assertThat(proj.effectiveOutputName()).isEqualTo("total");
+        var ar = (Expr.Arithmetic) proj.aggExpr();
+        assertThat(ar.op()).isEqualTo("*");
+    }
+
+    @Test
+    void parsesAggregateOfArithmeticExpression() {
+        var stmt = (SelectStatement) facade.parse(
+            "SELECT SUM(price * qty) AS total FROM pg.orders GROUP BY category");
+        var proj = stmt.projections().get(0);
+        assertThat(proj.isAggregate()).isTrue();
+        var agg = (Expr.Aggregate) proj.aggExpr();
+        assertThat(agg.arg()).isInstanceOf(Expr.Arithmetic.class);
     }
 }

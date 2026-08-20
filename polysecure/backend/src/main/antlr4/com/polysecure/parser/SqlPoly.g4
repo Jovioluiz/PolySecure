@@ -48,7 +48,13 @@ condition
     | K_NOT condition                                                      # NotCondition
     | left=condition K_OR  right=condition                                 # OrCondition
     | left=condition K_AND right=condition                                 # AndCondition
+    // Subquery alternatives are listed before their literal-list counterparts only for
+    // readability — ANTLR4's ALL(*) disambiguates on the token right after LPAREN (K_SELECT
+    // vs. a literal/expr start token), not alternative order, so this isn't load-bearing.
+    | left=expr op=compOp  LPAREN sub=selectStatement RPAREN               # CompareSubqueryCondition
     | left=expr op=compOp  right=expr                                      # CompareCondition
+    | expr K_NOT K_IN  LPAREN sub=selectStatement RPAREN                   # NotInSubqueryCondition
+    | expr K_IN        LPAREN sub=selectStatement RPAREN                   # InSubqueryCondition
     | expr K_NOT K_IN  LPAREN literal (COMMA literal)* RPAREN             # NotInCondition
     | expr K_IN        LPAREN literal (COMMA literal)* RPAREN             # InCondition
     | expr K_IS K_NOT K_NULL                                               # IsNotNullCondition
@@ -60,11 +66,23 @@ condition
 
 compOp : EQ | NEQ | GT | LT | GTE | LTE ;
 
+// Arithmetic alternatives (MulDivExpr, AddSubExpr) make this rule directly left-recursive;
+// ANTLR4 rewrites that into a precedence-climbing parser where earlier alternatives bind
+// tighter — MulDivExpr before AddSubExpr gives '*'/'/' higher precedence than '+'/'-',
+// matching standard arithmetic precedence. ParenExpr lets that be overridden explicitly.
 expr
     : func=IDENTIFIER LPAREN STAR RPAREN                   # AggregateStar
+    // Two-argument function call — grammar-level this is generic ("func(expr, NUMBER)"), but
+    // SqlPolyVisitorImpl currently only accepts func=ROUND; any other name is a parse-time
+    // ParseException there, not here, so adding a second two-arg function later doesn't need
+    // a grammar change.
+    | func=IDENTIFIER LPAREN arg=expr COMMA prec=NUMBER RPAREN  # FunctionCall2
     | func=IDENTIFIER LPAREN arg=expr RPAREN               # AggregateExpr
     | qualifier=IDENTIFIER DOT col=IDENTIFIER              # QualifiedColumn
     | qualifier=IDENTIFIER DOT STAR                        # QualifiedStar
+    | LPAREN inner=expr RPAREN                              # ParenExpr
+    | left=expr op=(STAR | DIV) right=expr                  # MulDivExpr
+    | left=expr op=(PLUS | MINUS) right=expr                # AddSubExpr
     | name=IDENTIFIER                                      # SimpleColumn
     | val=literal                                          # LiteralVal
     ;
@@ -82,8 +100,13 @@ insertStatement
     : K_INSERT K_INTO K_POLYSTORE tableName storeInsertClause+
     ;
 
+// physicalTable is optional: when omitted, the store's physical table name defaults to the
+// polystore (logical) tableName — same as before this grammar extension. Set it explicitly
+// when the store's native table has a different name (e.g. "fb.FB_PRODUTOS" vs. the logical
+// "produtos"), so a single cross-store INSERT/INSERT-SELECT can target already-existing
+// physical tables without requiring them to share one name across stores.
 storeInsertClause
-    : storeName LPAREN columnName (COMMA columnName)* RPAREN
+    : storeName (DOT physicalTable=IDENTIFIER)? LPAREN columnName (COMMA columnName)* RPAREN
       K_VALUES LPAREN literal (COMMA literal)* RPAREN
     ;
 
@@ -94,7 +117,7 @@ insertSelectStatement
     ;
 
 storeTargetClause
-    : storeName LPAREN columnName (COMMA columnName)* RPAREN
+    : storeName (DOT physicalTable=IDENTIFIER)? LPAREN columnName (COMMA columnName)* RPAREN
     ;
 
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
@@ -105,8 +128,11 @@ updateStatement
       (K_WHERE condition)?
     ;
 
+// physicalTable is optional, same override as storeInsertClause/storeTargetClause: when a
+// store's physical table name differs from the polystore (logical) tableName, address it
+// explicitly with "store.physicalTable.col = value"; omit it to default to tableName.
 setClause
-    : (store=IDENTIFIER DOT)? col=IDENTIFIER EQ val=literal
+    : (store=IDENTIFIER (DOT physicalTable=IDENTIFIER)? DOT)? col=IDENTIFIER EQ val=literal
     ;
 
 // ─── DELETE ──────────────────────────────────────────────────────────────────
@@ -221,8 +247,16 @@ COMMA     : ',' ;
 LPAREN    : '(' ;
 RPAREN    : ')' ;
 SEMICOLON : ';' ;
+PLUS      : '+' ;
+MINUS     : '-' ;
+DIV       : '/' ;
 
 STRING_LITERAL : '\'' (~'\'' | '\'\'')* '\'' ;
+// The optional leading '-' keeps negative literals (VALUES(-5), WHERE x = -5, BETWEEN -5 AND 5)
+// working without a unary-minus rule in `expr`. Side effect: the lexer's longest-match rule
+// means "a-5" (no space) tokenizes as IDENTIFIER('a') NUMBER('-5') — two tokens with no MINUS
+// between them, which the AddSubExpr alternative can't parse as subtraction. Write a space
+// before the number in subtraction ("a - 5") to avoid this.
 NUMBER         : '-'? [0-9]+ ('.' [0-9]+)? ;
 IDENTIFIER     : [a-zA-Z_][a-zA-Z0-9_]* ;
 LINE_COMMENT   : '--' ~[\r\n]* -> skip ;

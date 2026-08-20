@@ -7,6 +7,7 @@
 import {
   Component,
   ElementRef,
+  OnDestroy,
   ViewChild,
   afterNextRender,
   inject,
@@ -14,6 +15,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { basicSetup, EditorView } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
@@ -21,7 +23,18 @@ import { sql } from '@codemirror/lang-sql';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { QueryMode, QueryResult } from '../../models/types';
-import { QueryService } from '../../services/query.service';
+import { isClientTimeoutError, QueryService } from '../../services/query.service';
+
+// Presets shown in the timeout selector. `null` disables the client-side timeout entirely —
+// some analytical queries (large/unindexed tables) legitimately take several minutes; see the
+// "0 Unknown Error" investigation this was added for.
+const TIMEOUT_PRESETS: { label: string; valueMs: number | null }[] = [
+  { label: '30s', valueMs: 30_000 },
+  { label: '60s', valueMs: 60_000 },
+  { label: '2 min', valueMs: 120_000 },
+  { label: '5 min', valueMs: 300_000 },
+  { label: 'Sem limite', valueMs: null },
+];
 
 const darkTheme = EditorView.theme(
   {
@@ -57,10 +70,11 @@ const darkHighlightStyle = HighlightStyle.define([
 
 @Component({
   selector: 'app-editor-panel',
+  imports: [FormsModule],
   templateUrl: './editor-panel.html',
   styleUrl: './editor-panel.scss',
 })
-export class EditorPanel {
+export class EditorPanel implements OnDestroy {
   readonly defaultQuery = input('-- Exemplo: buscar dados de tabela cross-store\nSELECT *\nFROM orders\nWHERE id = 1');
 
   readonly result = output<QueryResult | { error: string }>();
@@ -73,6 +87,11 @@ export class EditorPanel {
   protected mode = signal<QueryMode>('standard');
   protected running = signal(false);
   protected translating = signal(false);
+
+  protected readonly timeoutPresets = TIMEOUT_PRESETS;
+  protected timeoutMs = signal<number | null>(60_000);
+  protected elapsedSeconds = signal(0);
+  private elapsedTimer?: ReturnType<typeof setInterval>;
 
   @ViewChild('editorWrap') private editorWrapRef!: ElementRef<HTMLDivElement>;
 
@@ -124,14 +143,46 @@ export class EditorPanel {
     const sqlText = this.editor?.state.doc.toString().trim();
     if (!sqlText) return;
     this.running.set(true);
-    this.queryService.execute(sqlText, this.mode()).subscribe({
-      next: res => { this.running.set(false); this.result.emit(res); },
+    this.startElapsedTimer();
+    const timeoutMs = this.timeoutMs();
+    this.queryService.execute(sqlText, this.mode(), timeoutMs).subscribe({
+      next: res => { this.stopRun(); this.result.emit(res); },
       error: err => {
-        this.running.set(false);
-        const msg = err?.error?.message ?? err?.message ?? 'Erro desconhecido';
-        this.result.emit({ error: msg });
+        this.stopRun();
+        this.result.emit({ error: this.describeError(err, timeoutMs) });
       },
     });
+  }
+
+  private stopRun() {
+    this.running.set(false);
+    this.stopElapsedTimer();
+  }
+
+  // Distinguishes a client-side give-up (query may well still be running on the server — there
+  // is no cancellation propagated to the DB driver) from a real error the backend reported, so
+  // the message doesn't read as "your query failed" when it may just still be working.
+  private describeError(err: unknown, timeoutMs: number | null): string {
+    if (isClientTimeoutError(err)) {
+      const label = this.timeoutPresets.find(p => p.valueMs === timeoutMs)?.label ?? `${timeoutMs}ms`;
+      return `Sem resposta em ${label}. A consulta pode continuar rodando no servidor — `
+        + `tabelas grandes ou sem índice adequado podem levar minutos. Tente de novo mais tarde `
+        + `ou aumente o timeout no seletor ao lado do botão Executar.`;
+    }
+    const e = err as { error?: { message?: string }; message?: string };
+    return e?.error?.message ?? e?.message ?? 'Erro desconhecido';
+  }
+
+  private startElapsedTimer() {
+    this.elapsedSeconds.set(0);
+    this.elapsedTimer = setInterval(() => this.elapsedSeconds.update(s => s + 1), 1000);
+  }
+
+  private stopElapsedTimer() {
+    if (this.elapsedTimer !== undefined) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = undefined;
+    }
   }
 
   protected translate() {
@@ -142,5 +193,9 @@ export class EditorPanel {
       next: res => { this.translating.set(false); this.translationReady.emit(res.translated); },
       error: () => { this.translating.set(false); },
     });
+  }
+
+  ngOnDestroy() {
+    this.stopElapsedTimer();
   }
 }

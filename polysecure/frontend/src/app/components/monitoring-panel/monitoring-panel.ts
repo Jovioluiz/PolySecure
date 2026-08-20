@@ -35,6 +35,11 @@ export class MonitoringPanel implements OnInit, OnDestroy {
     try { return new Date(iso).toLocaleTimeString('pt-BR'); } catch { return iso; }
   }
 
+  protected shortLogger(name: string): string {
+    const parts = name.split('.');
+    return parts[parts.length - 1];
+  }
+
   protected weightRows(): { name: string; value: number }[] {
     const model = this.admin.stats()?.costModel;
     if (!model) return [];
